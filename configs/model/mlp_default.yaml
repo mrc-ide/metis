@@ -1,0 +1,7 @@
+defaults:
+  - mlp_schema
+  - _self_
+
+num_blocks: 10
+hidden_dim: 256
+num_layers_per_block: 2

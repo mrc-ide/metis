@@ -1,0 +1,7 @@
+defaults:                                                                                                                                                                   
+  - mlp_default
+  - _self_                                                                                                                                                                     
+                                                                                                                                                                              
+num_blocks: 20                                                                                                                                                              
+hidden_dim: 512                                                                                                                                                             
+num_layers_per_block: 3 

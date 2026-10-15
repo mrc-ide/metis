@@ -1,0 +1,36 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty check
+        # Run ty from the locked dev dependency (pinned in pyproject.toml/uv.lock)
+        # rather than `uvx ty`, which always pulls the latest release and can
+        # change behaviour between runs.
+        entry: uv run ty check
+        language: system
+        types: [python]
+        exclude: ^(explore_data\.py|tests/)
+        stages: [pre-commit]
+
+      - id: ruff
+        name: ruff
+        entry: uvx ruff check --fix
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      - id: ruff-format
+        name: ruff format
+        entry: uvx ruff format
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        types: [python]
+        # Run the whole suite, don't just test the changed files
+        pass_filenames: false
+        stages: [pre-push] #Only run when we try to push

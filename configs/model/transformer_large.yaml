@@ -1,0 +1,15 @@
+defaults:
+  - transformer_default
+  - _self_
+
+n_layer: 16
+n_head: 16  # number of query heads
+n_kv_head: 16  # number of key/value heads (GQA)
+rope_base: 10000
+n_embd: 256
+in_and_out_biases: true
+# Sliding window attention pattern string, tiled across layers. Final layer always L.
+# Characters: L=long (full context), S=short (half context)
+# Examples: "L"=all full context, "SL"=alternating, "SSL"=two short then one long
+window_pattern: L
+cross_attn: null

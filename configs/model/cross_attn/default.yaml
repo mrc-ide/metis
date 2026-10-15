@@ -1,0 +1,7 @@
+defaults:
+  - _self_
+
+n_head: 8 
+cond_dim: null
+n_kv_head: 8 
+qkv_bias: true

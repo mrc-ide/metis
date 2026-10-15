@@ -1,0 +1,29 @@
+surrogate_input_variables:
+  - I_0
+  - beta
+  - gamma
+  - omega
+  - mu
+
+grouping_variables:
+  - I_0
+  - beta
+  - gamma
+  - omega
+  - mu 
+
+output_variables:
+  - S_t
+  - I_t
+  - R_t
+  - D_t
+
+num_timesteps: 200
+path: examples/sirds_data.parquet
+
+# advanced options we'll ignore for now
+reps_for_comparison_plot: 5
+trunc_until: null
+input_col_to_source_col: null
+observed_output_variables: null
+exclude_output_variables: null
