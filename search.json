@@ -1,0 +1,742 @@
+[
+  {
+    "objectID": "sbi/overview.html",
+    "href": "sbi/overview.html",
+    "title": "What is SBI?",
+    "section": "",
+    "text": "In many scientific disciplines it is commonplace to build simulations of natural systems due to the flexibility of general software compared to precisely defined sets of equations. However, these systems typically do not provide tractable likelihoods making parameter inference challenging. Simulation-based inference (SBI) encompasses many approximate inference techniques to overcome this issue, howerver in recent years SBI has been dominated by approaches that employ neural networks.\nMost of these methods can be described as either amortising the likelihood (Neural Likelihood Estimation), the likelihood-ratio (Neural Ratio Estimation) or the posterior (Neural Posterior Estimation).\n\n\n\nOverview of NLE, NRE and NPE. Taken from Cranmer et. al. 2020.\n\n\nIn brief, NLE fits a neural network with a tractable likelihood to simulated data, NRE learns \\(\\frac{p(x|\\theta)}{p(\\theta)}\\) typically through a classifier or contrastive loss and NPE learns to perform posterior inference for a given simulator and prior in a single forward pass. Unlike NPE, NLE and NRE must be substituted into inference pipelines (e.g. MCMC, Variational Inference) every time a new inference is required.\nIn Metis we don’t aim to support every SBI use-case, but as our existing Normalising Flow surrogates have tractable likelihoods they can serve as NLE models.\n\n\n\n\n\n\nTip\n\n\n\nIf you intend to use a surrogate in an SBI inference pipeline ensure that the prior’s support is contained in the proposal/sampling distribution used to generate your data.",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "What is SBI?"
+    ]
+  },
+  {
+    "objectID": "models/normalising-flow.html",
+    "href": "models/normalising-flow.html",
+    "title": "Normalising Flow",
+    "section": "",
+    "text": "The normalising flow model is a stochastic surrogate with efficiently computable exact density.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Normalising Flow"
+    ]
+  },
+  {
+    "objectID": "models/normalising-flow.html#when-this-might-be-a-good-fit",
+    "href": "models/normalising-flow.html#when-this-might-be-a-good-fit",
+    "title": "Normalising Flow",
+    "section": "When this might be a good fit",
+    "text": "When this might be a good fit\nThe normalising flow surrogate is a good option when stochasticity and/or evaluating the exact density of the surrogate is needed. Access to this density enables the surrogate to be used in parameter inference pipelines like MCMC, Variational Inference or Simulation-Based Inference (SBI).\nArchitecturally it is impelemented as a Transformer Autoregressive Flow (TARFlow), which is a modern normalising flow design that composes transformer blocks into an end-to-end invertible architecture. Its typical training cost is somewhere between the transformer surrogate and the flow matching model and its inference cost is similar to the flow matching model. Currently it only supports static inputs but we plan on implementing sequence conditioning as well.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Normalising Flow"
+    ]
+  },
+  {
+    "objectID": "models/normalising-flow.html#how-normalising-flows-work",
+    "href": "models/normalising-flow.html#how-normalising-flows-work",
+    "title": "Normalising Flow",
+    "section": "How Normalising Flows work",
+    "text": "How Normalising Flows work\n\nMaximum likelihood via change of variables\nA Normalising Flow parametrises an invertible transformation \\(f_{\\theta}\\) from the data distribution \\(p_{\\mathrm{data}}\\) to a noise distribution \\(p_0\\) (usually Gaussian). Once trained the network can be inverted to transform noise samples into data. This transformation also has an associated density \\(p_{\\mathrm{model}}\\) which is accessible via the change of variable formula\n\\[\n\\log p_{\\mathrm{model}}(x)=\\log p_0(f_{\\theta}(x))+\\log\\vert\\mathrm{det}(\\frac{df_{\\theta}(x)}{dx})\\vert\n\\]\nArchitecturally Normalising Flows are designed to be exactly invertible with log-determinants that can be efficiently computed. This allows a maximum likelihood estimation objective to be implemented as\n\\[\n\\min_{\\theta}\\; -\\log p_0(f_{\\theta}(x))-\\log\\vert\\mathrm{det}(\\frac{df_{\\theta}(x)}{dx})\\vert\n\\]\n\n\nArchitecture\nNormalising Flows have a rich literature with architectures that make different tradeoffs and until recently they were not regarded as scalable as generative models. Recently, the Transformer Autoregressive Flow (TARFlow) (Zhai et al. 2025) has emerged as a scalable approach to Normalising Flows. Like many Normalising Flows the overall network \\(f_{\\theta}\\) is a composition of several invertible blocks \\(f_{M}\\circ f_{M-1}\\cdots\\circ f_{1}\\). Each of these blocks flips the order of the sequence with \\(\\pi(x)\\), and predicts scale \\(\\alpha\\) and shift \\(\\mu\\) parameters for each of the elements in the sequence with an autoregressive transformer \\(T(x)\\): \\[\n\\begin{align}\n&x^{\\mathrm{output}}_{i}=(x^{\\mathrm{input}}_{i}-\\mu_{i})\\odot \\exp (-\\alpha_i)\\\\\n&\\text{where } \\mu_i \\text{ and } \\alpha_i \\text{ are predicted by } T(x_{&lt;i})\\\\\n\\end{align}\n\\]\n\n\n\n\n\n\nFigure 1: Transformer Autoregressive Flow Block. Adapted from Zhai et al. (2025).\n\n\n\nCrucially, since the transformer is causal, \\(\\alpha_i\\) and \\(\\mu_i\\) only depend on the elements strictly proceeding \\(i\\). Hence, the block can be exactly inverted by autoregressively rolling out\n\\[\nx^{\\mathrm{input}}_{i}=(x^{\\mathrm{output}}_{i}\\odot\\exp(\\alpha_i))+\\mu_i\n\\]\n\n\n\n\n\n\nWarning\n\n\n\nNormalising Flows are known to struggle with numerical issues on high dimensional data like images. To overcome this, Zhai et al. (2025) train on noise-augmented data, and apply Tweedie’s trick to produce clean samples at inference. The downside of this approach is substantially more expensive inference and the loss of exact density evaluation.\nIn Metis we have not implemented this as we have not encountered this issue in testing on timeseries data from two malaria simulators.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Normalising Flow"
+    ]
+  },
+  {
+    "objectID": "models/normalising-flow.html#configuring-an-itarflow-model",
+    "href": "models/normalising-flow.html#configuring-an-itarflow-model",
+    "title": "Normalising Flow",
+    "section": "Configuring an iTarFlow model",
+    "text": "Configuring an iTarFlow model\nThe normalising flow is configured via these variables:\n\nchannels: The width of the network\npatch_size: The number of timesteps per sequence element processed by the model. Defaults to 1, increasing it reduces the length of the sequence the model has to process at potentially the cost of some performance.\nnum_blocks: Number of TARFlow blocks\nnum_layers: Number of layers per TARFlow block\nnum_heads: Number of attention heads\nnum_static_tokens: Number of tokens used for conditioning on the static input",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Normalising Flow"
+    ]
+  },
+  {
+    "objectID": "models/mlp.html",
+    "href": "models/mlp.html",
+    "title": "MLP",
+    "section": "",
+    "text": "The MLP (MultiLayer Perceptron) or feedforward neural network is Metis’s most basic architecture.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "MLP"
+    ]
+  },
+  {
+    "objectID": "models/mlp.html#when-this-might-be-a-good-fit",
+    "href": "models/mlp.html#when-this-might-be-a-good-fit",
+    "title": "MLP",
+    "section": "When this might be a good fit",
+    "text": "When this might be a good fit\nThe MLP is a good starting point for datasets with only static inputs. It is very fast to train and generate predictions from. It will likely not outperform the other architectures (when properly tuned), and unlike the Normalising Flow or Flow Matching architectures, the MLP is a deterministc surrogate.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "MLP"
+    ]
+  },
+  {
+    "objectID": "models/mlp.html#how-does-an-mlp-work",
+    "href": "models/mlp.html#how-does-an-mlp-work",
+    "title": "MLP",
+    "section": "How does an MLP work?",
+    "text": "How does an MLP work?\n\nArchitectural walkthrough\nAn MLP’s computation is a series of matrix multiplications composed with non-linear activations. Metis’s implementation also includes residual connections which stablise the training of deeper networks.\nIn order to get a better sense of how these components work lets trace through the network’s forward computation:\nx = self.input_layer(inputs)\nfor block in self.blocks:\n    x = block(x)\nx = self.output_layer(x)\nThe input_layer linearly projects (i.e. a matrix multiplication) the static input vector to vectors the size of the model’s hidden dimension. Next, we iteratively pass our transformed inputs through a series of residual blocks.\nEach residual block applies several layers to the input and adds the result back to the original input:\n\n\n\n\n\nflowchart LR\n    x[x] --&gt; layer1[Linear]\n    layer1 --&gt; activation1[ReLU]\n    activation1 --&gt; dots[...]\n    dots --&gt; layerN[Linear]\n    x --&gt; add[\"\\+\"]\n    layerN --&gt; add\n    add --&gt; out[output]\n\n\n Residual block structure. \n\n\n\nFinally, the output layer linearly projects x to the output dimensionality.\n\n\nTraining\nThe MLP is trained to minimise the Mean-Squared Error:\n\\[\n\\mathrm{Loss} = \\frac{1}{M}\\sum_{m=1}^{M}(\\mathrm{MLP}^{\\theta}(\\mathrm{static\\_input}_m)-\\mathrm{output}_m)^2\n\\]",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "MLP"
+    ]
+  },
+  {
+    "objectID": "models/mlp.html#configuring-an-mlp",
+    "href": "models/mlp.html#configuring-an-mlp",
+    "title": "MLP",
+    "section": "Configuring an MLP",
+    "text": "Configuring an MLP\nThe MLP’s architecture is configured via:\n\ninput_dim: The number of static inputs.\noutput_dim: The flattened dimensionality of the sequence. (e.g. 5 timesteps where each step has 3 values would have a flat dim of 15)\nnum_blocks: The number of residual blocks in the network (i.e. network depth)\nhidden_dim: The width of the network (all the matrices inside residual blocks will be \\(\\mathrm{hidden\\_dim}\\times \\mathrm{hidden\\_dim}\\))\nnum_layers_per_block: The number of layers within a residual block (also controls depth)\n\nThe first two options are automatically configured for the dataset that you train on.\nWithin Metis we already provide MLP size presets:\n\n\n\nConfig\nhidden_dim\nnum_blocks\nnum_layers_per_block\n\n\n\n\nmlp_small\n128\n5\n2\n\n\nmlp_default\n256\n10\n2\n\n\nmlp_large\n512\n20\n3\n\n\n\nTo create a new MLP configuration in configs/model:\ndefaults:\n  - mlp_default\n  - _self_\n\nnum_blocks: ...\nhidden_dim: ...\nnum_layers_per_block: ...",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "MLP"
+    ]
+  },
+  {
+    "objectID": "models/transformer.html",
+    "href": "models/transformer.html",
+    "title": "Transformer",
+    "section": "",
+    "text": "The autoregressive transformer model is a flexible and deterministic surrogate.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Transformer"
+    ]
+  },
+  {
+    "objectID": "models/transformer.html#when-this-might-be-a-good-fit",
+    "href": "models/transformer.html#when-this-might-be-a-good-fit",
+    "title": "Transformer",
+    "section": "When this might be a good fit",
+    "text": "When this might be a good fit\nThe transformer is a great option when a deterministic surrogate suffices. Furthermore, it is more flexible than an MLP, supporting conditioning on both static inputs and sequences. Additionally, because it is autoregressive it naturally supports variable length outputs and starting generation from a variable number of observed datapoints.\nUnfortunately, Transformer surrogates are slower to train and infer with and often require more tuning to match the performance of an MLP. However, they tend to benefit more from scaling data or the size of the network.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Transformer"
+    ]
+  },
+  {
+    "objectID": "models/transformer.html#how-transformers-work",
+    "href": "models/transformer.html#how-transformers-work",
+    "title": "Transformer",
+    "section": "How transformers work",
+    "text": "How transformers work\n\nArchitectural walkthrough\nThe transformer architecture is substantially more complex than an MLP’s so we won’t cover it in great depth here.\nThe most important part of the Transformer architecture is the self-attention mechansim which enables the model to process sequence data in a highly expressive way. In an attention computation, the entries of an incoming sequence \\(x_1, x_2, \\dots, x_n\\) are given corresponding query, key and value vectors via projection matrices (e.g. \\(q_1=W_{q}x_1^T\\)). These entries are collected in a \\(Q\\) (query), \\(K\\) (key) and \\(V\\) (value) matrix and the transformed sequence is computed via \\(y=\\mathrm{softmax}(\\frac{QK^T}{\\sqrt{d}})V\\). In an autoregressive transformer this computation is restricted so that query vectors may only attend to key vectors from the past:\n\n\n\n\n\n\nFigure 1: Causal self-attention: each input may attend to itself and earlier inputs, but not future inputs.\n\n\n\n\n\n\n\n\n\nNote\n\n\n\nIn practice multi-head attention is used, where models have several projection matrices and perform attention over the different sets of projections independently and in parallel and then combine the results.\n\n\n\n\n\n\nFigure 2: Multi-head attention: Each block is a projected sequence of query, key, or value vectors.\n\n\n\n\n\nDuring training the attention computation can be done over entire sequences at once (this is a major strength of the transformer), however, during inference, the sequence is iteratively generated. Since the latest entry in the sequence still needs to attend to every entry that came before it we are forced to either repeatedly recompute prior key and value vectors or to store them in a Key-Value Cache (KV-Cache). For larger transformers or generating longer sequences using a KV-Cache can significantly speed up inference.\nIn Metis we also support options like interleaving full self-attention with sliding window attention which halves the maximum size of the attention window for a computational speedup:\n\n\n\n\n\n\nFigure 3: Sliding window self-attention: Later tokens may not attend to the furtherest tokens in the past.\n\n\n\nWe additionally support specifying fewer key-value heads (i.e. projections) than query heads to make attention more efficient and reduce the size of the KV-cache. This is known as Grouped-Query Attention.\n\n\n\n\n\n\nFigure 4: Grouped-query attention: Multiple query heads share each key-value head.\n\n\n\n\n\n\nTraining\nLanguage transformers train with Cross-Entropy Loss over tokens but since our data is typically continuous, we use a next-token MSE loss.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Transformer"
+    ]
+  },
+  {
+    "objectID": "models/transformer.html#configuring-a-transformer",
+    "href": "models/transformer.html#configuring-a-transformer",
+    "title": "Transformer",
+    "section": "Configuring a Transformer",
+    "text": "Configuring a Transformer\nThe Transformer architecture is configured via these variables:\n\nsequence_len\nx_input_dim\nstatic_input_dim\nn_layer: The number of transformer blocks in the model\nn_head: The number of query heads in each attention layer\nn_kv_head: The number of key and value heads in each attention layer\nrope_base: Base frequency for the rotary positional embeddings, don’t alter unless you really need to\nn_embd: Hidden dimension of the network (controls width)\nin_and_out_biases: Whether the input and output projection layers use learned biases\nwindow_pattern: Sliding window attention pattern string. ‘L’ (Long) for full context and ‘S’ (Short) for half context. Final layer is always ‘L’. (e.g. ‘SL’ would alternate between short and long context)\ncross_attn: The cross attention config for sequence conditioning, can be None\n\nThe sequence_len, x_input_dim and static_input_dim are all automatically configured based on the dataset config.\nWithin Metis we provide Transformer size presets:\n\n\n\n\n\n\n\n\n\n\n\nConfig\nn_layer\nn_head\nn_kv_head\nn_embd\nwindow_pattern\n\n\n\n\ntransformer_small\n6\n4\n4\n64\nL\n\n\ntransformer_default\n12\n8\n8\n128\nL\n\n\ntransformer_large\n16\n16\n16\n256\nL\n\n\n\nWhilst the standard configs exclusively make use of full attention you may find it beneficial use an interleaved pattern for computational reasons. Similarly, it may be helpful to use more query heads than kv heads (i.e. Grouped Query Attention).\n\ndefaults:\n  - transformer_default\n  - _self_\n\nn_layer: ...\nn_head: ... \nn_kv_head: ...\nrope_base: ...\nn_embd: ...\nin_and_out_biases: ...\nwindow_pattern: ...\ncross_attn: ...",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Transformer"
+    ]
+  },
+  {
+    "objectID": "basics/motivation.html",
+    "href": "basics/motivation.html",
+    "title": "Motivating surrogate modelling",
+    "section": "",
+    "text": "Many scientific disciplines are increasingly reliant on computational simulators which reproduce complex behaviours. However, these simulators are often slow and expensive to run, rendering tasks like scenario analysis, forecasting and parameter inference, difficult or otherwise impractical. For example, its been reported that a single forward simulation over a large COVID-19 Agent-Based Model like JUNE can take several days (Chopra et al. 2023). Surrogate models serve as cost-effective approximations of these systems. Whilst surrogates have been implemented with techniques like nonparametric statistical methods and splines, modern neural network approaches offer significantly greater flexibility and are often more performant.\n\n\n\n\n\n\nTip\n\n\n\nFor an overview of the surrogate modelling process and a reporting standard for surrogates, see SMRS (Semenova et al. 2025).",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Motivating surrogate modelling"
+    ]
+  },
+  {
+    "objectID": "basics/motivation.html#why-surrogate-modelling",
+    "href": "basics/motivation.html#why-surrogate-modelling",
+    "title": "Motivating surrogate modelling",
+    "section": "",
+    "text": "Many scientific disciplines are increasingly reliant on computational simulators which reproduce complex behaviours. However, these simulators are often slow and expensive to run, rendering tasks like scenario analysis, forecasting and parameter inference, difficult or otherwise impractical. For example, its been reported that a single forward simulation over a large COVID-19 Agent-Based Model like JUNE can take several days (Chopra et al. 2023). Surrogate models serve as cost-effective approximations of these systems. Whilst surrogates have been implemented with techniques like nonparametric statistical methods and splines, modern neural network approaches offer significantly greater flexibility and are often more performant.\n\n\n\n\n\n\nTip\n\n\n\nFor an overview of the surrogate modelling process and a reporting standard for surrogates, see SMRS (Semenova et al. 2025).",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Motivating surrogate modelling"
+    ]
+  },
+  {
+    "objectID": "basics/motivation.html#introducing-metis",
+    "href": "basics/motivation.html#introducing-metis",
+    "title": "Motivating surrogate modelling",
+    "section": "Introducing METIS",
+    "text": "Introducing METIS\nMETIS is a set of configurable recipes for training neural surrogates of time series simulators. METIS implements several neural network architectures and algorithms and is designed so that practictioners can easily train and sweep over different combinations purely through simple config files and comandline overrrides. Using METIS to develop surrogates for existing simulators simply requires preparing data in the correct format and supplying appropriate config files.\n\n\n\n\n\n\n\nImportant\n\n\n\nMETIS is designed to be useful to those without deep learning expertise, however, it will be beneficial to have some basic familiarity with neural networks and their training. If you’re unfamiliar or feeling a bit rusty these resources should be helpful:\n\nBut what is a neural network? (YouTube)\nIntroduction to Machine Learning (Online Notes)\nUnderstanding Deep Learning (Textbook)",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Motivating surrogate modelling"
+    ]
+  },
+  {
+    "objectID": "basics/saving-and-loading.html",
+    "href": "basics/saving-and-loading.html",
+    "title": "Saving and Loading models",
+    "section": "",
+    "text": "Once trained, we’d like to deploy our models in some downstream applications. We may also want to resume a training run that was interrupted (e.g. due to a hardware issue) or simply continue training if model performance was still improving.\n\n\nBoth of these use cases are addressed via Metis’s ‘checkpointing’ system. The checkpointer saves the model weights, current training step, pseudo-random generator states and the optimiser (amongst other things) so that training may be resumed seamlessly.\nTo enable checkpointing in your run simply set how often you’d like a checkpoint saved (number of steps)\ncheckpointer:\n  save_every: 1000\nAnd to continue training from an existing checkpoint we set resume_from,\ncheckpointer:\n  resume_from: outputs/example_run/checkpoint\n\n\n\nIn order to load just the model weights in a script we first instantiate the model and then load the weights into the model via\nckpt = torch.load(path_to_checkpoint.ckpt, map_location='cpu', weights_only=False)\nmodel.load_state_dict(ckpt['model'])",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Saving and Loading models"
+    ]
+  },
+  {
+    "objectID": "basics/saving-and-loading.html#checkpointing",
+    "href": "basics/saving-and-loading.html#checkpointing",
+    "title": "Saving and Loading models",
+    "section": "",
+    "text": "Both of these use cases are addressed via Metis’s ‘checkpointing’ system. The checkpointer saves the model weights, current training step, pseudo-random generator states and the optimiser (amongst other things) so that training may be resumed seamlessly.\nTo enable checkpointing in your run simply set how often you’d like a checkpoint saved (number of steps)\ncheckpointer:\n  save_every: 1000\nAnd to continue training from an existing checkpoint we set resume_from,\ncheckpointer:\n  resume_from: outputs/example_run/checkpoint",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Saving and Loading models"
+    ]
+  },
+  {
+    "objectID": "basics/saving-and-loading.html#loading-just-the-model-weights",
+    "href": "basics/saving-and-loading.html#loading-just-the-model-weights",
+    "title": "Saving and Loading models",
+    "section": "",
+    "text": "In order to load just the model weights in a script we first instantiate the model and then load the weights into the model via\nckpt = torch.load(path_to_checkpoint.ckpt, map_location='cpu', weights_only=False)\nmodel.load_state_dict(ckpt['model'])",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Saving and Loading models"
+    ]
+  },
+  {
+    "objectID": "basics/training.html",
+    "href": "basics/training.html",
+    "title": "Training in METIS",
+    "section": "",
+    "text": "The entrypoint to a training job in Metis is train.py. Rather than importing training code or writing a script, in Metis we simply run train.py in the terminal or a notebook with the appropriate config files supplied. Given the data and config file we prepared earlier, getting started with training is a matter of overriding the default data config.",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Training in METIS"
+    ]
+  },
+  {
+    "objectID": "basics/training.html#overriding-the-default-training-config",
+    "href": "basics/training.html#overriding-the-default-training-config",
+    "title": "Training in METIS",
+    "section": "Overriding the default training config",
+    "text": "Overriding the default training config\nFirst we ensure the repository root is our current directory since this is where train.py is located.\n\nimport os\nfrom IPython.display import Image\n\nif os.path.basename(os.getcwd()) == \"examples\":\n    os.chdir(\"..\")\nprint(\"cwd:\", os.getcwd())\n\nNow we’ll override the default training config to use our sirds dataset and in order to check that our model fit the data well we will generate some samples via the sampling arguments:\n\nsampling.generate_samples=True indicates we’d like the surrogate to generate samples once we’re done training\nsampling.samples_name specifies where we would like the samples saved\nsample.subsample used to generate samples for only a subset of the validation set\n\nNow go ahead and run this:\n\n%%bash\nuv run train.py \\\n  --config-name default \\\n  dataset=sirds \\\n  sampling.generate_samples=True \\\n  sampling.samples_name=examples/mlp_plot.png \\\n  sampling.subsample=5\n\nIf you’re in a notebook run this cell to see the model’s plots, otherwise navigate to examples/mlp_plot.png and take a look there. The orange lines are realisations from the SIRDS simulator for a particular parameter group and the blue line is the prediction from our MLP surrogate.\n\nImage(filename=\"examples/mlp_plot.png\")",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Training in METIS"
+    ]
+  },
+  {
+    "objectID": "basics/training.html#training-a-transformer",
+    "href": "basics/training.html#training-a-transformer",
+    "title": "Training in METIS",
+    "section": "Training a transformer",
+    "text": "Training a transformer\nNext we’ll try a transformer. All we need to do is override the model config. Be aware that this may take a bit longer to train:\n\n%%bash\nuv run train.py \\\n  --config-name default \\\n  dataset=sirds \\\n  sampling.generate_samples=True \\\n  sampling.samples_name=examples/transformer_plot.png \\\n  sampling.subsample=5 \\\n  model=transformer_default\n\nAs before we can view the model’s predictions:\n\nImage(filename=\"examples/transformer_plot.png\")",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Training in METIS"
+    ]
+  },
+  {
+    "objectID": "basics/training.html#training-a-flow-matching-model",
+    "href": "basics/training.html#training-a-flow-matching-model",
+    "title": "Training in METIS",
+    "section": "Training a flow matching model",
+    "text": "Training a flow matching model\nAgain all we need to do is swap out the model config. Since this model is stochastic we generate multiple samples per parameter group. Solid blue is the mean and light blue are individual samples.\n\n%%bash\nuv run train.py \\\n  --config-name default \\\n  dataset=sirds \\\n  sampling.generate_samples=True \\\n  sampling.samples_name=examples/flow_matching_plot.png \\\n  sampling.subsample=5 \\\n  model=flow_matching_default\n\n\nImage(filename=\"examples/flow_matching_plot.png\")\n\n\n\n\n\n\n\nTip\n\n\n\nBefore moving on try changing some other training settings in the default config. You could change how long you train with max_steps, change the learning rate with peak_lr and lr_warmup_frac, change batch_size or try a differently sized model.",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Training in METIS"
+    ]
+  },
+  {
+    "objectID": "basics/sirds-example.html",
+    "href": "basics/sirds-example.html",
+    "title": "Example SIRDS model",
+    "section": "",
+    "text": "We use a stochastic SIRDS (Susceptible–Infected–Recovered–Dead–Susceptible) compartmental model as a running example throughout the docs. The particulars of how this model work aren’t too important, but the basic idea is that our simulator depends on some static input parameters (I0, beta, etc…) and produces stochastic timeseries of compartment counts over time.",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Example SIRDS model"
+    ]
+  },
+  {
+    "objectID": "basics/sirds-example.html#code-definition",
+    "href": "basics/sirds-example.html#code-definition",
+    "title": "Example SIRDS model",
+    "section": "Code definition",
+    "text": "Code definition\n\n\nimport numpy as np\nimport pandas as pd\nimport matplotlib.pyplot as plt\n\n\ndef simulate_sirds(\n    I0=0.005, beta=0.4, gamma=0.1, omega=0.02, mu=0.01, T=365, dt=1.0, N=1000, seed=None\n):\n    rng = np.random.default_rng(seed)\n    n = int(T / dt) + 1\n    I0_count = max(0, min(N, int(round(I0 * N))))\n\n    S = np.zeros(n, dtype=np.int32)\n    I = np.zeros(n, dtype=np.int32)\n    R = np.zeros(n, dtype=np.int32)\n    D = np.zeros(n, dtype=np.int32)\n    S[0], I[0], R[0], D[0] = N - I0_count, I0_count, 0, 0\n\n    for k in range(n - 1):\n        p_inf = 1.0 - np.exp(-beta * I[k] / N * dt)\n        p_rec = 1.0 - np.exp(-gamma * dt)\n        p_die = 1.0 - np.exp(-mu * dt)\n        p_sus = 1.0 - np.exp(-omega * dt)\n\n        new_I = rng.binomial(S[k], p_inf)\n\n        # Competing risks: each infected individual can recover, die, or stay infected.\n        # Use a multinomial draw so recovery + death never exceeds I[k].\n        p_stay = max(0.0, 1.0 - p_rec - p_die)\n        outcomes = rng.multinomial(I[k], [p_rec, p_die, p_stay])\n        new_R = outcomes[0]\n        new_D = outcomes[1]\n\n        new_S = rng.binomial(R[k], p_sus)\n\n        S[k + 1] = S[k] - new_I + new_S\n        I[k + 1] = I[k] + new_I - new_R - new_D\n        R[k + 1] = R[k] + new_R - new_S\n        D[k + 1] = D[k] + new_D\n\n    return S, I, R, D",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Example SIRDS model"
+    ]
+  },
+  {
+    "objectID": "basics/sirds-example.html#example-realisations",
+    "href": "basics/sirds-example.html#example-realisations",
+    "title": "Example SIRDS model",
+    "section": "Example realisations",
+    "text": "Example realisations\nHere we again emphasise that even with fixed input parameters, varying the random seed produces different realisations.\n\nfig, ax = plt.subplots(1, 1, figsize=(10, 4.5))\nfor s in range(20):\n    S, I, R, D = simulate_sirds(seed=s)\n    t = np.arange(len(S))\n    ax.plot(t, S, color=\"#2E86AB\", label=\"S\" if s == 0 else None, alpha=0.35, lw=1)\n    ax.plot(t, I, color=\"#C73E1D\", label=\"I\" if s == 0 else None, alpha=0.35, lw=1)\n    ax.plot(t, R, color=\"#6A994E\", label=\"R\" if s == 0 else None, alpha=0.35, lw=1)\n    ax.plot(t, D, color=\"#C21B8A\", label=\"D\" if s == 0 else None, alpha=0.35, lw=1)\nax.set(\n    xlabel=\"time (days)\",\n    ylabel=\"count\",\n    title=\"\",\n)\nax.legend()\n\nplt.tight_layout()\nplt.show()",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Example SIRDS model"
+    ]
+  },
+  {
+    "objectID": "sweeping/overview.html",
+    "href": "sweeping/overview.html",
+    "title": "Why sweep?",
+    "section": "",
+    "text": "The quality of a model is determined not only by its learning algorithm and data but also by hyperparameters which control the architecture or aspects of the learning algorithm. Models are often quite sensitive to these hyperparameters and so sweeping or tuning hyperparameters can lead to substantial performance improvemnents (or in some cases may be required to successfully train a model at all).\nGiven that large neural networks can memorise their training data given sufficient training steps, it is important to maintain held-out i.i.d. data so that the model’s ability to generalise beyond its training data can be assessed. Generally this entails partitioning datasets into a training set and a tuning set, with the majority of the data being allocated to the training set. Usually great care is taken to ensure that these sets are identically distributed without information about the tuning set being leaked in the training set. In Metis our dataloader automatically partitions datasets into train and tune by the parameter group, ensuring that all the realistions in a group are in one of the sets.",
+    "crumbs": [
+      "Home",
+      "Sweeping",
+      "Why sweep?"
+    ]
+  },
+  {
+    "objectID": "sweeping/overview.html#sensitivity-to-hyperparameters",
+    "href": "sweeping/overview.html#sensitivity-to-hyperparameters",
+    "title": "Why sweep?",
+    "section": "",
+    "text": "The quality of a model is determined not only by its learning algorithm and data but also by hyperparameters which control the architecture or aspects of the learning algorithm. Models are often quite sensitive to these hyperparameters and so sweeping or tuning hyperparameters can lead to substantial performance improvemnents (or in some cases may be required to successfully train a model at all).\nGiven that large neural networks can memorise their training data given sufficient training steps, it is important to maintain held-out i.i.d. data so that the model’s ability to generalise beyond its training data can be assessed. Generally this entails partitioning datasets into a training set and a tuning set, with the majority of the data being allocated to the training set. Usually great care is taken to ensure that these sets are identically distributed without information about the tuning set being leaked in the training set. In Metis our dataloader automatically partitions datasets into train and tune by the parameter group, ensuring that all the realistions in a group are in one of the sets.",
+    "crumbs": [
+      "Home",
+      "Sweeping",
+      "Why sweep?"
+    ]
+  },
+  {
+    "objectID": "sweeping/overview.html#basic-sweeping",
+    "href": "sweeping/overview.html#basic-sweeping",
+    "title": "Why sweep?",
+    "section": "Basic sweeping",
+    "text": "Basic sweeping\nThe basic hyperparameter sweep workflow is:\n\nChoose hyperparameters to fix (e.g. batch size) and sweep over (e.g. learning rate)\nChoose the metric you’d like to target\nDefine how you’d like to sample the sweep space (e.g. random, bayesian optimisation) and the number of training runs you’d like to do\nLaunch one or more sweep agents\nAnalyze sweep results and (if necessecary) launch another more targeted sweep\n\nOver the next few tutorials we’ll see how to use tools like Weights & Biases to manage sweeps and a walkthrough of how sweeping works in Metis.",
+    "crumbs": [
+      "Home",
+      "Sweeping",
+      "Why sweep?"
+    ]
+  },
+  {
+    "objectID": "sweeping/sweep-config.html",
+    "href": "sweeping/sweep-config.html",
+    "title": "METIS sweep config",
+    "section": "",
+    "text": "In this walkthrough we’ll see how to setup a sweep for an MLP model on our SIRDS dataset. As with training, sweeps in Metis are driven through a config.\n\n\nFor this walkthrough we’ll focus on sweeping over the peak_lr, the lr_warmup_frac, the number of model blocks, and the hidden dimension of the model. We’ll keep batch size, layers per block and the maximum number of steps fixed.\n\n\n\n\n\n\nTip\n\n\n\nIf you’re only going to sweep over one or two hyperparameters prioritise the peak_lr and lr_warmup_frac. They often have an outsized effect on model performance.\n\n\n\n\n\nThe most common metric to optimise is validation loss, however in some applications other metrics might be targeted. In Metis we default to targeting the final validation loss of our models (final_val_loss).\n\n\n\nWeights & Biases support sweeping strategies like grid where every single possibile combination of hyperparameters in the config is systemtically explored, random which just randomly samples from the possibile configurations and bayes which uses Bayesian optimisation to intelligently select the next sweep experiments. In this tutorial we’ll stick to bayes.\nAdditionally, you have a choice of specifying the options for each hyperparameter as a fixed list, or with a sampling distribution over a certain range:\n  #Params to optimise\n  peak_lr:\n    min: 0.000001\n    max: 0.01 \n    distribution: log_uniform_values #log uniform sampling of [1e-6,1e-2] \n  lr_warmup_frac: \n    values: [0.0, 0.05, 0.1, 0.2, 0.3, 0.4] #fixed\n  model.num_blocks: \n    min: 5\n    max: 20\n    distribution: int_uniform # compact way of writing [5,6,...,20]\n  model.hidden_dim: \n    values: [128, 256, 512, 1024] #Fixed set of options\nWe don’t explicitly set the number of runs in the config but its useful to decide this early on since with a smaller budget of experiments its likely better to keep your sampling strategy more focused. For this demo we’ll plan on doing 50 runs.\nPutting everything together our sweep config looks like:\nprogram: train\nproject: your_existing_weights_and_biases_project\nmetric:\n  name: final_val_loss\n  goal: minimize\n\nmethod: bayes\nparameters:\n  #Fixed\n  sampling.generate_samples:\n    value: false #don't generate samples during sweeping\n  dataset: \n    value: sirds\n  plot_loss_curves:\n    value: false #don't make unnecessary plots\n  model:\n    value: mlp_default #we'll modify mlp default\n  logger.use_wandb:\n    value: true #essential\n  logger.tags:\n    value: [mlp, sirds]\n  batch_size:\n    value: 128\n  max_steps:\n   value: 2000\n  \n  #Params to optimise\n  peak_lr:\n    min: 0.000001\n    max: 0.01 \n    distribution: log_uniform_values\n  lr_warmup_frac: \n    values: [0.0, 0.05, 0.1, 0.2, 0.3, 0.4]\n  model.num_blocks: \n    min: 5\n    max: 20\n    distribution: int_uniform\n  model.hidden_dim: \n    values: [128, 256, 512, 1024]\n\ncommand:\n- ${env}\n- ${interpreter}\n- \"-m\"\n- ${program}\n- \"--config-name\"\n- \"default\"\n#These hydra options disable the creation of\n#output folders for all the runs\n- \"hydra.output_subdir=null\"\n- \"hydra/job_logging=disabled\"\n- \"hydra/hydra_logging=disabled\"\n- \"hydra.run.dir=.\"\n- ${args_no_hyphens}\nSave this to configs/sweep/sirds/mlp.yaml. Now we’re ready to register our sweep with Weights & Biases:\nuv run wandb sweep --project your_existing_weights_and_biases_project configs/sweep/sirds/mlp.yaml\nThis will output a string of the form &lt;entity&gt;/&lt;project-name&gt;/&lt;sweep-id&gt; that we’ll give to weights and biases agents when launching sweeps.\n\n\n\nNow that our sweep is registered with weights an biases it should appear in the sweeps section. We can now launch sweeper agents that launch runs on our behalf locally or on a remote system (e.g. a cluster). Furthermore, multiple sweep agents can be active at one time, allowing us to have multiple experiments running in parallel. The only requirement is that Metis is installed and all required files like configs and datasets are present on each system.\nTo start an agent:\nuv run wandb agent --count &lt;this agent's experiment budget&gt; &lt;entity&gt;/&lt;project-name&gt;/&lt;sweep-id&gt;",
+    "crumbs": [
+      "Home",
+      "Sweeping",
+      "METIS sweep config"
+    ]
+  },
+  {
+    "objectID": "sweeping/sweep-config.html#walkthrough-sweeping-on-sirds",
+    "href": "sweeping/sweep-config.html#walkthrough-sweeping-on-sirds",
+    "title": "METIS sweep config",
+    "section": "",
+    "text": "In this walkthrough we’ll see how to setup a sweep for an MLP model on our SIRDS dataset. As with training, sweeps in Metis are driven through a config.\n\n\nFor this walkthrough we’ll focus on sweeping over the peak_lr, the lr_warmup_frac, the number of model blocks, and the hidden dimension of the model. We’ll keep batch size, layers per block and the maximum number of steps fixed.\n\n\n\n\n\n\nTip\n\n\n\nIf you’re only going to sweep over one or two hyperparameters prioritise the peak_lr and lr_warmup_frac. They often have an outsized effect on model performance.\n\n\n\n\n\nThe most common metric to optimise is validation loss, however in some applications other metrics might be targeted. In Metis we default to targeting the final validation loss of our models (final_val_loss).\n\n\n\nWeights & Biases support sweeping strategies like grid where every single possibile combination of hyperparameters in the config is systemtically explored, random which just randomly samples from the possibile configurations and bayes which uses Bayesian optimisation to intelligently select the next sweep experiments. In this tutorial we’ll stick to bayes.\nAdditionally, you have a choice of specifying the options for each hyperparameter as a fixed list, or with a sampling distribution over a certain range:\n  #Params to optimise\n  peak_lr:\n    min: 0.000001\n    max: 0.01 \n    distribution: log_uniform_values #log uniform sampling of [1e-6,1e-2] \n  lr_warmup_frac: \n    values: [0.0, 0.05, 0.1, 0.2, 0.3, 0.4] #fixed\n  model.num_blocks: \n    min: 5\n    max: 20\n    distribution: int_uniform # compact way of writing [5,6,...,20]\n  model.hidden_dim: \n    values: [128, 256, 512, 1024] #Fixed set of options\nWe don’t explicitly set the number of runs in the config but its useful to decide this early on since with a smaller budget of experiments its likely better to keep your sampling strategy more focused. For this demo we’ll plan on doing 50 runs.\nPutting everything together our sweep config looks like:\nprogram: train\nproject: your_existing_weights_and_biases_project\nmetric:\n  name: final_val_loss\n  goal: minimize\n\nmethod: bayes\nparameters:\n  #Fixed\n  sampling.generate_samples:\n    value: false #don't generate samples during sweeping\n  dataset: \n    value: sirds\n  plot_loss_curves:\n    value: false #don't make unnecessary plots\n  model:\n    value: mlp_default #we'll modify mlp default\n  logger.use_wandb:\n    value: true #essential\n  logger.tags:\n    value: [mlp, sirds]\n  batch_size:\n    value: 128\n  max_steps:\n   value: 2000\n  \n  #Params to optimise\n  peak_lr:\n    min: 0.000001\n    max: 0.01 \n    distribution: log_uniform_values\n  lr_warmup_frac: \n    values: [0.0, 0.05, 0.1, 0.2, 0.3, 0.4]\n  model.num_blocks: \n    min: 5\n    max: 20\n    distribution: int_uniform\n  model.hidden_dim: \n    values: [128, 256, 512, 1024]\n\ncommand:\n- ${env}\n- ${interpreter}\n- \"-m\"\n- ${program}\n- \"--config-name\"\n- \"default\"\n#These hydra options disable the creation of\n#output folders for all the runs\n- \"hydra.output_subdir=null\"\n- \"hydra/job_logging=disabled\"\n- \"hydra/hydra_logging=disabled\"\n- \"hydra.run.dir=.\"\n- ${args_no_hyphens}\nSave this to configs/sweep/sirds/mlp.yaml. Now we’re ready to register our sweep with Weights & Biases:\nuv run wandb sweep --project your_existing_weights_and_biases_project configs/sweep/sirds/mlp.yaml\nThis will output a string of the form &lt;entity&gt;/&lt;project-name&gt;/&lt;sweep-id&gt; that we’ll give to weights and biases agents when launching sweeps.\n\n\n\nNow that our sweep is registered with weights an biases it should appear in the sweeps section. We can now launch sweeper agents that launch runs on our behalf locally or on a remote system (e.g. a cluster). Furthermore, multiple sweep agents can be active at one time, allowing us to have multiple experiments running in parallel. The only requirement is that Metis is installed and all required files like configs and datasets are present on each system.\nTo start an agent:\nuv run wandb agent --count &lt;this agent's experiment budget&gt; &lt;entity&gt;/&lt;project-name&gt;/&lt;sweep-id&gt;",
+    "crumbs": [
+      "Home",
+      "Sweeping",
+      "METIS sweep config"
+    ]
+  },
+  {
+    "objectID": "sweeping/wandb.html",
+    "href": "sweeping/wandb.html",
+    "title": "Weights & Biases",
+    "section": "",
+    "text": "Weights & Biases is a platform for manage sweeps and tracking experiments. At a basic level it can be used to track the progress of your training runs and to serve as a record of experiments you’ve done. For regular training runs this can be enabled by setting these options in a training config:\nlogger:\n  use_wandb: true\n  project: your_existing_weights_and_biases_project\n  tags: [] #any tags you'd like to apply to the run for organisation\n\n\n\n\n\n\nTip\n\n\n\nYou’ll need to make a free Weights and Biases account if you don’t have one.\n\n\nHere’s an example of the sort of information you can get at a glance:\n\n\n\nScreenshot of a Weights & Biases dashboard for a Metis training run\n\n\nOnce launched, Weights & Biases collects all the runs in a sweep together, allows you to sort the runs by key metrics (e.g. final validation loss) and computes things like hyperparameter correlation with validation loss:\n\n\n\nScreenshot of a Weights & Biases parameter correlation for a sweep\n\n\nFor more advanced use cases its also possible to download the raw results for local analysis.",
+    "crumbs": [
+      "Home",
+      "Sweeping",
+      "Weights & Biases"
+    ]
+  },
+  {
+    "objectID": "utils/distributed-training.html",
+    "href": "utils/distributed-training.html",
+    "title": "Training on multiple GPUs",
+    "section": "",
+    "text": "Common forms of parallelism during training. Taken from Raschka (2023)\nMetis can take advantage of multiple GPUs located in the same machine via data parallelism, wherein indentical copies of the model on separate GPUs are fed with different batches of data, their gradients aggregated and the overall parameter update copied to each GPU. Whilst more sophisticated forms of parallelism are possible, and often required at larger scales, we do not support them due to the complexity they introduce.",
+    "crumbs": [
+      "Home",
+      "Utilities and advanced features",
+      "Training on multiple GPUs"
+    ]
+  },
+  {
+    "objectID": "utils/distributed-training.html#from-one-to-four-gpus",
+    "href": "utils/distributed-training.html#from-one-to-four-gpus",
+    "title": "Training on multiple GPUs",
+    "section": "From one to four GPUs",
+    "text": "From one to four GPUs\nRecall our usual single-GPU command,\nuv run train.py --config-name default dataset=sirds\nTo use four GPUs on one machine, set num_gpus:\nuv run train.py --config-name default dataset=sirds num_gpus=4\ntrain.py starts one worker process per GPU itself, so everything else (Hydra output directories, checkpoints, wandb logging, --multirun sweeps) works exactly as it does on one GPU.\nIn cases where you want to use only a subset of the GPUs, the CUDA_VISIBLE_DEVICES environment variable can be used to restrict the GPUs visible to train.py. For example, to train on only GPUs 2 and 3:\nCUDA_VISIBLE_DEVICES=2,3 uv run train.py --config-name default dataset=sirds num_gpus=2",
+    "crumbs": [
+      "Home",
+      "Utilities and advanced features",
+      "Training on multiple GPUs"
+    ]
+  },
+  {
+    "objectID": "utils/distributed-training.html#batch-size",
+    "href": "utils/distributed-training.html#batch-size",
+    "title": "Training on multiple GPUs",
+    "section": "Batch size",
+    "text": "Batch size\nbatch_size is the global batch size across all GPUs. It must be divisible by num_gpus. For example, batch_size=128 with four GPUs gives each GPU 32 samples per optimizer step.",
+    "crumbs": [
+      "Home",
+      "Utilities and advanced features",
+      "Training on multiple GPUs"
+    ]
+  },
+  {
+    "objectID": "utils/distributed-training.html#troubleshooting",
+    "href": "utils/distributed-training.html#troubleshooting",
+    "title": "Training on multiple GPUs",
+    "section": "Troubleshooting",
+    "text": "Troubleshooting\nCommon checks when a job fails to start:\n\nConfirm nvidia-smi lists at least num_gpus visible GPUs.\nConfirm batch_size is divisible by num_gpus.\nSet NCCL_DEBUG=INFO before the command when diagnosing NCCL initialization or communication failures.",
+    "crumbs": [
+      "Home",
+      "Utilities and advanced features",
+      "Training on multiple GPUs"
+    ]
+  },
+  {
+    "objectID": "basics/installing_metis.html",
+    "href": "basics/installing_metis.html",
+    "title": "Installing Metis",
+    "section": "",
+    "text": "Metis is implemented in Python and its dependencies are manged with uv. While you can install Metis without uv, this is not recommended.",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Installing Metis"
+    ]
+  },
+  {
+    "objectID": "basics/installing_metis.html#installation-with-uv",
+    "href": "basics/installing_metis.html#installation-with-uv",
+    "title": "Installing Metis",
+    "section": "Installation with uv",
+    "text": "Installation with uv\nBefore you begin install uv and git as system packages on your operating system. Then,\n\nClone the Metis repository via\ngit clone ...\nChange directory\ncd ...\nUse uv to install the correct version of Python and all of the required dependencies\nuv sync\n\n\n\n\n\n\nTip\n\n\n\nIf you would like to contribue to the development of Metis (or just run the test suite), use\n uv sync --dev\nand then\nuv run pytest -v\nto run the full test suite.",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Installing Metis"
+    ]
+  },
+  {
+    "objectID": "basics/hydra.html",
+    "href": "basics/hydra.html",
+    "title": "Hydra crash course",
+    "section": "",
+    "text": "METIS is configured end-to-end with the Hydra. You don’t need to touch Python to change models, datasets or training settings — you compose and override Hydra configs instead.",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Hydra crash course"
+    ]
+  },
+  {
+    "objectID": "basics/hydra.html#hydra-basics",
+    "href": "basics/hydra.html#hydra-basics",
+    "title": "Hydra crash course",
+    "section": "Hydra basics",
+    "text": "Hydra basics\nHydra’s configuration files are simple text-based YAML files. For example a basic training config might look like this:\ndata: malaria_data\nmodel: transformer\nsteps: 10000\nOnce ingested into a Python program (omitted here) the config’s values can be accessed like any object:\nprint(config.steps) #should print 10000\nImportantly, an entry’s value doesn’t have to just be a string or a number, it can refer to another configuration file. For example, we could create a configuration file for each dataset that stores where the data lives and other metadata like the column names.\n├── configs/\n│   ├── config.yaml\n│   ├── data\n│       ├── malaria_data.yaml\n│       └── ebola_data.yaml\n│   \n└── my_program.py\nThen malaria_data.yaml might contain something like\ndata_path: datasets/malaria_simulations.parquet\ncolumn_names:\n - a\n - b\n - c\nThen to get Hydra to use this config instead of a string we use the defaults list directive:\ndefaults:\n  data: malaria_data\n\nmodel: transformer\nsteps: 10000\ndefaults is a special directive telling Hydra to use data/malaria_data.yaml when composing the configuration object. The resulting object is a composition of configs from defaults with configs specified in your config.yaml.\nFurthermore, when running our program in the commandline, we can override configs or values without modifying the config file itself:\nuv run my_program --config-name config data=ebola_data steps=5000\nFinally, overrides can happen inside configs themselves, for example, a particular training run might fetch the data from a different location but still have the same column names as the default malaria_data.yaml:\ndefaults:\n  - data: malaria_data #start off with the usual values in malaria_data.yaml\n  - _self_ #apply overrides in this config last \n\ndata:\n  data_path: new_location #override the data config's data_path\nmodel: transformer\nsteps: 10000\nThese core features allow us to keep our configuration files nicely structured and make it quick to try different models or datasets.\n\n\n\n\n\n\nTip\n\n\n\nHydra has many more features not mentioned here. If you ever get stuck or feel a bit lost the Hydra tutorials are excellent and most LLMs are helpful when writing or editing Hydra configs.",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Hydra crash course"
+    ]
+  },
+  {
+    "objectID": "basics/hydra.html#writing-a-config-for-our-data",
+    "href": "basics/hydra.html#writing-a-config-for-our-data",
+    "title": "Hydra crash course",
+    "section": "Writing a config for our data",
+    "text": "Writing a config for our data\n\n\n\n\n\n\ngraph TD\n    A[Dataset Config] --&gt; D[Train Config]\n    B[Model Config] --&gt; D\n    style A fill:#4a90d9,color:#fff,stroke:none\n    style B fill:#7b61ff,color:#fff,stroke:none\n    style D fill:#e06c75,color:#fff,stroke:none\n\n\n\n\n\n\n\nThe config system in Metis is quite similar to the examples we had above, a train config is composed out of a model config and a dataset config. For a quickstart we’ll just focus on the dataset config since we can simply override existing training configs to use it.\nHere’s the completed config for our example SIRDS dataset. It’s fairly self-explanatory, surrogate_input_variables are static input values that we’d like our surrogate to condition on and output_variables are what we’d like the surrogate to predict. grouping_variables are used to group reps together, for most use-cases grouping_variables should be the same as the surrogate_inputs, but for some datasets this flexibility is needed.\nsurrogate_input_variables:\n  - I_0\n  - beta\n  - gamma\n  - omega\n  - mu\n\ngrouping_variables:\n  - I_0\n  - beta\n  - gamma\n  - omega\n  - mu \n\noutput_variables:\n  - S_t\n  - I_t\n  - R_t\n  - D_t\n\nnum_timesteps: 200\npath: examples/sirds_data.parquet\n\n# advanced options we'll ignore for now\ntrunc_until: null\ninput_col_to_source_col: null\nobserved_output_variables: null\nexclude_output_variables: null\nSave this config as sirds.yaml in configs/dataset, we’ll need it for a tutorial on training.\n\n\n\n\n\n\nImportant\n\n\n\nLater on we’ll explore some of the other options, including conditioning on inputs that vary in time.",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Hydra crash course"
+    ]
+  },
+  {
+    "objectID": "basics/preparing-data.html",
+    "href": "basics/preparing-data.html",
+    "title": "Walkthrough: Preparing data for METIS",
+    "section": "",
+    "text": "Before training a surrogate, you need a dataset of simulator inputs (parameters) paired with outputs (realisations).",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Walkthrough: Preparing data for METIS"
+    ]
+  },
+  {
+    "objectID": "basics/preparing-data.html#flattening-a-single-realisation",
+    "href": "basics/preparing-data.html#flattening-a-single-realisation",
+    "title": "Walkthrough: Preparing data for METIS",
+    "section": "Flattening a single realisation",
+    "text": "Flattening a single realisation\nMETIS expects the timeseries realisations to be stored in parquet files in a flat format. For example, let’s consider a single realisation where the columm ‘a’ varies over time.\n\nimport matplotlib.pyplot as plt\n\na = [0.5, 0.85, 0.74, 0.94, 1.01]\nplt.plot(a, marker='D')\nplt.xlabel('t')\nplt.ylabel('a')\nplt.show()\n\n\n\n\n\n\n\n\nThen in a ‘flat’ format this data would have 5 rows, and two columns:\n\nimport pandas as pd\n\npd.DataFrame({'a':a, 't':range(5)})\n\n\n\n\n\n\n\n\na\nt\n\n\n\n\n0\n0.50\n0\n\n\n1\n0.85\n1\n\n\n2\n0.74\n2\n\n\n3\n0.94\n3\n\n\n4\n1.01\n4",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Walkthrough: Preparing data for METIS"
+    ]
+  },
+  {
+    "objectID": "basics/preparing-data.html#multiple-sirds-realisations",
+    "href": "basics/preparing-data.html#multiple-sirds-realisations",
+    "title": "Walkthrough: Preparing data for METIS",
+    "section": "Multiple SIRDS realisations",
+    "text": "Multiple SIRDS realisations\nFor the SIRDS simulator we also need to store the simulator’s inputs and disambiguate between different realisations with the same inputs. Simulator inputs are just treated as another column, and different realisations are disambiguated via the ‘rep’ column:\n\n\nCode\nimport numpy as np\nimport pandas as pd\n\n\ndef simulate_sirds(\n    I0=0.005, beta=0.4, gamma=0.1, omega=0.02, mu=0.01, T=365, dt=1.0, N=1000, seed=None\n):\n    rng = np.random.default_rng(seed)\n    n = int(T / dt) + 1\n    I0_count = max(0, min(N, int(round(I0 * N))))\n\n    S = np.zeros(n, dtype=np.int32)\n    I = np.zeros(n, dtype=np.int32)\n    R = np.zeros(n, dtype=np.int32)\n    D = np.zeros(n, dtype=np.int32)\n    S[0], I[0], R[0], D[0] = N - I0_count, I0_count, 0, 0\n\n    for k in range(n - 1):\n        p_inf = 1.0 - np.exp(-beta * I[k] / N * dt)\n        p_rec = 1.0 - np.exp(-gamma * dt)\n        p_die = 1.0 - np.exp(-mu * dt)\n        p_sus = 1.0 - np.exp(-omega * dt)\n\n        new_I = rng.binomial(S[k], p_inf)\n\n        # Competing risks: each infected individual can recover, die, or stay infected.\n        # Use a multinomial draw so recovery + death never exceeds I[k].\n        p_stay = max(0.0, 1.0 - p_rec - p_die)\n        outcomes = rng.multinomial(I[k], [p_rec, p_die, p_stay])\n        new_R = outcomes[0]\n        new_D = outcomes[1]\n\n        new_S = rng.binomial(R[k], p_sus)\n\n        S[k + 1] = S[k] - new_I + new_S\n        I[k + 1] = I[k] + new_I - new_R - new_D\n        R[k + 1] = R[k] + new_R - new_S\n        D[k + 1] = D[k] + new_D\n\n    return S, I, R, D\n\n\n\n# the simulator inputs\nparams = dict(I0=0.005, beta=0.4, gamma=0.1, omega=0.02, mu=0.01)\n\n# number of realisations we would like \nn_reps = 5\n \nframes = []\nfor rep in range(n_reps):\n    \n    S, I, R, D = simulate_sirds(seed=rep, **params, T=100)\n    S,I,R,D=S[1:],I[1:],R[1:], D[1:] # we drop t=0 since for this simulator it carries no information\n    t = np.arange(len(S))\n    frames.append(pd.DataFrame({\n        \"rep\": rep,\n        \"t\": t,\n        \"I_t\": I,\n        \"S_t\": S,\n        \"R_t\": R,\n        \"I_0\": params[\"I0\"],\n        \"beta\": params[\"beta\"],\n        \"gamma\": params[\"gamma\"],\n        \"omega\": params[\"omega\"],\n        \"mu\":params[\"mu\"],\n    }))\n    df = pd.concat(frames, ignore_index=True)\n\nprint(f\"reps:  {df['rep'].unique()}\")\ndf\n\nreps:  [0 1 2 3 4]\n\n\n\n\n\n\n\n\n\nrep\nt\nI_t\nS_t\nR_t\nI_0\nbeta\ngamma\nomega\nmu\n\n\n\n\n0\n0\n0\n7\n993\n0\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n1\n0\n1\n6\n993\n1\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n2\n0\n2\n8\n990\n2\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n3\n0\n3\n13\n985\n2\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n4\n0\n4\n19\n979\n2\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n...\n...\n...\n...\n...\n...\n...\n...\n...\n...\n...\n\n\n495\n4\n95\n80\n330\n429\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n496\n4\n96\n89\n327\n421\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n497\n4\n97\n96\n327\n413\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n498\n4\n98\n98\n330\n408\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n499\n4\n99\n99\n326\n410\n0.005\n0.4\n0.1\n0.02\n0.01\n\n\n\n\n500 rows × 10 columns",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Walkthrough: Preparing data for METIS"
+    ]
+  },
+  {
+    "objectID": "basics/preparing-data.html#sampling-the-parameter-space",
+    "href": "basics/preparing-data.html#sampling-the-parameter-space",
+    "title": "Walkthrough: Preparing data for METIS",
+    "section": "Sampling the parameter space",
+    "text": "Sampling the parameter space\nWhen building a dataset of simulator realisations its important to consider which regions of the simulator’s parameter (or input) space you sample and how they are sampled. For example, a simulator may be more sensitive in a certain parameter region or parameters physically constrained to lie within a particular range. For our example we will simply sample uniformly within reasonable ranges but another popular approach is Latin Hypercube Sampling (see Scipy Latin Hypercube).\n\n\nimport seaborn as sns\n\nN_PARAMS = 1_000\n\n# reproducible parameter sampling\nparam_rng = np.random.default_rng(42)\nI0_vals = param_rng.uniform(0.01, 0.1, N_PARAMS)\nbeta_vals = param_rng.uniform(0.10, 0.80, N_PARAMS)\ngamma_vals = param_rng.uniform(0.05, 0.30, N_PARAMS)\nomega_vals = param_rng.uniform(0.005, 0.05, N_PARAMS)\nmu_vals = param_rng.uniform(0.005, 0.05, N_PARAMS)\n\n#visualise the sampled space\nsns.pairplot(\n    pd.DataFrame({'I0':I0_vals, 'beta':beta_vals, 'gamma':gamma_vals, 'omega':omega_vals, 'mu':mu_vals}), corner=True,height=2\n)",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Walkthrough: Preparing data for METIS"
+    ]
+  },
+  {
+    "objectID": "basics/preparing-data.html#creating-the-full-dataset",
+    "href": "basics/preparing-data.html#creating-the-full-dataset",
+    "title": "Walkthrough: Preparing data for METIS",
+    "section": "Creating the full dataset",
+    "text": "Creating the full dataset\nGiven our parameters we can now create an entire dataset.\n\nimport time\nN_REPS = 5\nT, DT = 200, 1.0\nn_steps_sim = int(T / DT) + 1  # simulator produces this many steps including t=0\nn_steps = n_steps_sim - 1  # we drop t=0 since it carries no information\ntotal_rows = N_PARAMS * N_REPS * n_steps\n\n\n# preallocate\nt_template = np.arange(1, n_steps_sim) * DT\nrep = np.empty(total_rows, dtype=np.int32)\nt_col = np.empty(total_rows, dtype=np.float32)\nI_col = np.empty(total_rows, dtype=np.int32)\nS_col = np.empty(total_rows, dtype=np.int32)\nR_col = np.empty(total_rows, dtype=np.int32)\nD_col = np.empty(total_rows, dtype=np.int32)\nI0_col = np.empty(total_rows, dtype=np.float32)\nbeta_col = np.empty(total_rows, dtype=np.float32)\ngamma_col = np.empty(total_rows, dtype=np.float32)\nomega_col = np.empty(total_rows, dtype=np.float32)\nmu_col = np.empty(total_rows, dtype=np.float32)\n\nprint(f\"Running {N_PARAMS} × {N_REPS} = {N_PARAMS * N_REPS} simulations...\")\nt0 = time.time()\n\nrow = 0\nfor i in range(N_PARAMS):\n    params = dict(\n        I0=I0_vals[i], beta=beta_vals[i], gamma=gamma_vals[i], omega=omega_vals[i], mu=mu_vals[i]\n    )\n    for r in range(N_REPS):\n        seed = i * N_REPS + r  # unique across all runs\n        S, I, R,D = simulate_sirds(seed=seed, T=T, dt=DT, **params)\n\n        sl = slice(row, row + n_steps)\n        rep[sl] = r + 1  # 1..5\n        t_col[sl] = t_template\n        I_col[sl] = I[1:]\n        S_col[sl] = S[1:]\n        R_col[sl] = R[1:]\n        D_col[sl] = D[1:]\n        I0_col[sl] = params[\"I0\"]\n        beta_col[sl] = params[\"beta\"]\n        gamma_col[sl] = params[\"gamma\"]\n        omega_col[sl] = params[\"omega\"]\n        mu_col[sl] = params[\"mu\"]\n        row += n_steps\n\n    if (i + 1) % 100 == 0:\n        print(f\"  {i + 1}/{N_PARAMS} inputs done ({time.time() - t0:.1f}s)\")\n\nRunning 1000 × 5 = 5000 simulations...\n  100/1000 inputs done (0.4s)\n  200/1000 inputs done (0.7s)\n  300/1000 inputs done (1.0s)\n  400/1000 inputs done (1.4s)\n  500/1000 inputs done (1.7s)\n  600/1000 inputs done (2.1s)\n  700/1000 inputs done (2.4s)\n  800/1000 inputs done (2.7s)\n  900/1000 inputs done (3.1s)\n  1000/1000 inputs done (3.4s)\n\n\n\ndf = pd.DataFrame(\n    {\n        \"rep\": rep,\n        \"t\": t_col,\n        \"I_t\": I_col,\n        \"S_t\": S_col,\n        \"R_t\": R_col,\n        \"D_t\": D_col,\n        \"I_0\": I0_col,\n        \"beta\": beta_col,\n        \"gamma\": gamma_col,\n        \"omega\": omega_col,\n        \"mu\": mu_col,\n    }\n)\n\ndf\n\n\n\n\n\n\n\n\nrep\nt\nI_t\nS_t\nR_t\nD_t\nI_0\nbeta\ngamma\nomega\nmu\n\n\n\n\n0\n1\n1.0\n75\n909\n16\n0\n0.079656\n0.143444\n0.260683\n0.042315\n0.037224\n\n\n1\n1\n2.0\n54\n906\n35\n5\n0.079656\n0.143444\n0.260683\n0.042315\n0.037224\n\n\n2\n1\n3.0\n45\n900\n46\n9\n0.079656\n0.143444\n0.260683\n0.042315\n0.037224\n\n\n3\n1\n4.0\n32\n903\n56\n9\n0.079656\n0.143444\n0.260683\n0.042315\n0.037224\n\n\n4\n1\n5.0\n23\n902\n65\n10\n0.079656\n0.143444\n0.260683\n0.042315\n0.037224\n\n\n...\n...\n...\n...\n...\n...\n...\n...\n...\n...\n...\n...\n\n\n999995\n5\n196.0\n35\n212\n271\n482\n0.035281\n0.464050\n0.074520\n0.013116\n0.032685\n\n\n999996\n5\n197.0\n37\n214\n267\n482\n0.035281\n0.464050\n0.074520\n0.013116\n0.032685\n\n\n999997\n5\n198.0\n36\n213\n266\n485\n0.035281\n0.464050\n0.074520\n0.013116\n0.032685\n\n\n999998\n5\n199.0\n34\n214\n267\n485\n0.035281\n0.464050\n0.074520\n0.013116\n0.032685\n\n\n999999\n5\n200.0\n34\n218\n263\n485\n0.035281\n0.464050\n0.074520\n0.013116\n0.032685\n\n\n\n\n1000000 rows × 11 columns\n\n\n\nAnd thats it as far as data preparation is concerned! To actually save this dataframe as a parquet file simply use\ndf.to_parquet( \"sirds_data.parquet\", index=False, compression=\"snappy\")\nNext we’ll look at how Hydra works, and writing a dataset config file.",
+    "crumbs": [
+      "Home",
+      "Basics of surrogate modelling with Metis",
+      "Walkthrough: Preparing data for METIS"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "METIS",
+    "section": "",
+    "text": "METIS is a collection of configurable “recipes” for training neural network surrogate (emulator) models that stand in for expensive stochastic simulators. Instead of running a slow simulator every time you need a sample, you train a model once and then generate realisations cheaply.\nThe codebase favours simple, single-file implementations wired together with Hydra configuration, so that you can swap models, datasets and training settings by editing YAML rather than code.",
+    "crumbs": [
+      "Home"
+    ]
+  },
+  {
+    "objectID": "index.html#how-these-docs-are-organised",
+    "href": "index.html#how-these-docs-are-organised",
+    "title": "METIS",
+    "section": "How these docs are organised",
+    "text": "How these docs are organised\n\nBasics of surrogate modelling — what surrogate modelling is, the SIRDS example simulator, preparing data, a Hydra crash course, and training your first model.\nDifferent kinds of surrogates — the model families on offer (MLP, Transformer, Flow Matching, Normalising Flow), when to reach for each, and how their configs work.\nUtilities and advanced features — training on multiple GPUs and visualising datasets.\nSweeping — tuning hyperparameters with Weights & Biases and the METIS sweep configs.\nSBI — using a trained surrogate for simulation-based inference.\n\n\n\n\n\n\n\nTip\n\n\n\nNew here? Start with Motivating surrogate modelling and work through the Basics section in order.",
+    "crumbs": [
+      "Home"
+    ]
+  },
+  {
+    "objectID": "models/flow-matching.html",
+    "href": "models/flow-matching.html",
+    "title": "Flow Matching",
+    "section": "",
+    "text": "The flow matching transformer model is a flexible and stochastic surrogate.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Flow Matching"
+    ]
+  },
+  {
+    "objectID": "models/flow-matching.html#when-this-might-be-a-good-fit",
+    "href": "models/flow-matching.html#when-this-might-be-a-good-fit",
+    "title": "Flow Matching",
+    "section": "When this might be a good fit",
+    "text": "When this might be a good fit\nThe flow matching surrogate is a good option when stochasticity is needed. Architecturally, it is implemented as a modified transformer and also supports static and sequence conditioning.",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Flow Matching"
+    ]
+  },
+  {
+    "objectID": "models/flow-matching.html#how-flow-matching-works",
+    "href": "models/flow-matching.html#how-flow-matching-works",
+    "title": "Flow Matching",
+    "section": "How flow matching works",
+    "text": "How flow matching works\n\nArchitecture\nThe flow matching surrogate is parametrised with a non-causal transformer that processes the entire sequence in parallel.\n\n\nFlow Matching\nFlow Matching and Diffusion models are the current state-of-the-art learning algorithms for continuous valued data (e.g. images, protein-structure prediction). In brief, these models learn time-varying velocity fields which can be used to transport a sample of pure noise (e.g. from a Gaussian) to the data distribution. In order to generate samples the time-varying velocity field \\(v_{\\theta}\\) must be integrated over time \\(t\\) to transport a noise sample \\(x_0\\) to the data distribution: \\[\nx_{\\mathrm{pred}} = x_0+\\int_{t=0}^{t=1}v_{\\theta}(x_t|c)dt\\text{, where } c \\text{ is conditioning (i.e. surrogate inputs)}\n\\]\nIn practice this is achieved via numerical ODE solvers like Euler or Heun, with the number of solver steps introducing a trade-off between speed and quality.\n\n\n\n\n\n\nNoteTechnical note\n\n\n\n\n\nDiffusion models have equivalent ODE and SDE forms and can be sampled via SDE-solvers like Euler-Maruyama or ODE-solvers like Heun. See Song et al. (2021).\n\n\n\n\n\n\n\n\nFlow matching models iteratively transform samples from noise to the data distribution. Animation produced by Floor Eijkelboom.\n\n\nBy fixing the conditioning \\(c\\) and varying the initial noise, you can sample multiple realisations rather than the average realisation that an MLP or Autoregressive transformer learn.\n\n\n\n\n\n\nTip\n\n\n\nThe mathematical details of these models and the derivation of their training objectives are out of scope but if you’re interested you may find these resources helpful:\n\nAccessible introduction to Diffusion (YouTube)\nIntroduction to Normalising Flows and Flow Matching (Blog)\nExplanation of score-based diffusion by its inventor (Blog)\nUnifying flow matching and diffusion (Monograph)",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Flow Matching"
+    ]
+  },
+  {
+    "objectID": "models/flow-matching.html#configuring-a-flow-matching-model",
+    "href": "models/flow-matching.html#configuring-a-flow-matching-model",
+    "title": "Flow Matching",
+    "section": "Configuring a Flow Matching model",
+    "text": "Configuring a Flow Matching model\nMetis’s implementation is designed to support different kinds of Stochastic Interpolant algorithms (the general name for diffusion and flow matching), although currently only Flow Matching has been set up and tested. The top-level config controls details like the type of algorithm and solver steps for evaluation and contains an inner architectural config that is very similar to the transformer:\n\ninterpolant: Currently only ‘flow-matching’ supported.\nnum_steps: Number of ODE solver steps for evaluations, does not impact training.\nsolver: ODE solver, currently only ‘heun’ (second-order) and ‘euler’ (first-order) are supported.\nmulti_mode: Whether to generate multiple samples from the median of the parameter group (‘median’ option) or to generate multiple samples for each entry in the parameter group (‘entire_parameter_group’). This second option only makes sense for models like HRP and Magenta where realisations within the same parameter group can have different static inputs.\nsit:\n\nsequence_len: Number of timesteps in the data sequence.\ndata_dim: Number of variables per datapoint.\ncond_dim: Number of static input variables.\nn_blocks: Number of transfomer blocks.\nn_head: Number of query heads in attention layers.\nn_kv_head: Number of key-value heads in attention layers.\nqkv_bias: Whether the projection matrices in the self-attention module use biases.\nemdb_dim: Hidden dimension of the network\ncond_dropout_prob: Currently unused - but could be used to enable classifier-free guidance\nin_and_out_biases: Whether the input and out projections use learnable biases.\ncross_attn: The cross attention config for sequence conditioning, can be None.\n\n\nThe sequence_len, data_dim and cond_dim are all automatically configured based on the dataset config.\n\n\n\nConfig\nn_blocks\nn_head\nn_kv_head\nembd_dim\n\n\n\n\n\nflow_matching_small\n6\n4\n4\n64\n\n\n\nflow_matching_default\n12\n8\n8\n64\n\n\n\nflow_matching_large\n16\n16\n16\n128",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Flow Matching"
+    ]
+  },
+  {
+    "objectID": "models/overview.html",
+    "href": "models/overview.html",
+    "title": "Overview of the models",
+    "section": "",
+    "text": "METIS ships several model families. This page gives a very high-level comparison so you can pick a starting point; each model has its own page with detail.\n\n\n\nModel\nStochastic\nTraining cost\nInference cost\nSequence conditioning\nExact density\n\n\n\n\nMLP\n❌\nLow\nLow\n❌\n❌\n\n\nTransformer\n❌\nHigh\nMedium\n✅\n❌\n\n\nFlow Matching\n✅\nHigh\nHigh\n✅\n❌\n\n\nNormalising Flow\n✅\nMedium\nMedium\n👷\n✅",
+    "crumbs": [
+      "Home",
+      "Different kinds of surrogates",
+      "Overview of the models"
+    ]
+  },
+  {
+    "objectID": "sbi/vi-mcmc.html",
+    "href": "sbi/vi-mcmc.html",
+    "title": "VI and MCMC with iTarFlow",
+    "section": "",
+    "text": "Metis’s Normalising Flow surrogate provides an exact likelihood, enabling us to use it in-place of our simulator/data-generating processes’s likelihood function in standard inference pipelines.",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "VI and MCMC with iTarFlow"
+    ]
+  },
+  {
+    "objectID": "sbi/vi-mcmc.html#setup",
+    "href": "sbi/vi-mcmc.html#setup",
+    "title": "VI and MCMC with iTarFlow",
+    "section": "Setup",
+    "text": "Setup\nRun the commands from the repository root in a terminal, or download this page as a notebook into examples/ and run its cells. The setup cell below switches to the repository root. In a terminal, omit the notebook-only %%bash lines.\n\nimport os\nfrom pathlib import Path\n\nif Path.cwd().name == \"examples\":\n    os.chdir(\"..\")\nprint(\"cwd:\", Path.cwd())\n\nimport matplotlib.pyplot as plt\nimport numpy as np\nimport torch\nimport torch.nn as nn\nfrom hydra.utils import instantiate\nfrom IPython.display import Image\nfrom omegaconf import OmegaConf\n\nfrom dataloader import prepare_splits\nfrom examples.sirds_simulator import simulate_sirds\n\nDEVICE = \"cuda\" if torch.cuda.is_available() else \"cpu\"\ntorch.manual_seed(42)",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "VI and MCMC with iTarFlow"
+    ]
+  },
+  {
+    "objectID": "sbi/vi-mcmc.html#train-the-surrogate",
+    "href": "sbi/vi-mcmc.html#train-the-surrogate",
+    "title": "VI and MCMC with iTarFlow",
+    "section": "Train the surrogate",
+    "text": "Train the surrogate\nAs before, we’ll train our normalising flow (NF) surrogate on the SIRDS dataset we prepared:\n\n%%bash\nuv run train.py \\\n  --config-name default \\\n  model=itarflow_default \\\n  dataset=sirds \\\n  max_steps=10_000 \\\n  checkpointer.save_every=10_000 \\\n  hydra.run.dir=outputs/sbi-tutorial-nf \\\n  sampling.generate_samples=True \\\n  sampling.samples_name=examples/sbi_tutorial_nf_realisations.png \\\n  sampling.subsample=5\n\nAnd visualise the surrogate’s realisations to ensure it has fit the data well.\n\nImage(filename=\"examples/sbi_tutorial_nf_realisations.png\")",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "VI and MCMC with iTarFlow"
+    ]
+  },
+  {
+    "objectID": "sbi/vi-mcmc.html#load-the-trained-surrogate",
+    "href": "sbi/vi-mcmc.html#load-the-trained-surrogate",
+    "title": "VI and MCMC with iTarFlow",
+    "section": "Load the trained surrogate",
+    "text": "Load the trained surrogate\nThe training command writes to outputs/sbi-tutorial-nf. We reconstruct the model from its saved configuration and load the final checkpoint.\n\nrun_dir = Path(\"outputs/sbi-tutorial-nf\")\ncfg = OmegaConf.load(run_dir / \".hydra/config.yaml\")\n\n# These dimensions are set from the dataset by the training pipeline.\ncfg.model.out_channels = len(cfg.dataset.output_variables)\ncfg.model.num_timesteps = cfg.dataset.num_timesteps\ncfg.model.static_in = len(cfg.dataset.surrogate_input_variables)\n\nnf = instantiate(cfg.model).to(DEVICE)\ncheckpoint = torch.load(\n    run_dir / \"checkpoints/last.pt\",\n    map_location=\"cpu\",\n    weights_only=False,\n)\nnf.load_state_dict(checkpoint[\"model\"])\nnf.eval()\nnf.requires_grad_(False)\n\nThe checkpoint does not contain normalization statistics, so we reproduce them from the same dataset using the training pipeline’s preprocessing.\n\n_, _, input_stats, output_stats = prepare_splits(\n    cfg.dataset.path,\n    0.1,\n    42,\n    cfg.dataset.grouping_variables,\n    cfg.dataset.surrogate_input_variables,\n    cfg.dataset.output_variables,\n    cfg.dataset.num_timesteps,\n    cfg.dataset.trunc_until,\n    cfg.dataset.input_col_to_source_col,\n)\n\n# Static conditioning inputs use the statistics at the first timestep.\ninput_mean = input_stats.means[:, 0].to(DEVICE)\ninput_std = input_stats.stds[:, 0].to(DEVICE)\n\n# iTarFlow uses (batch, time, channels).\nseries_mean = output_stats.means.T.to(DEVICE)\nseries_std = output_stats.stds.T.to(DEVICE)",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "VI and MCMC with iTarFlow"
+    ]
+  },
+  {
+    "objectID": "sbi/vi-mcmc.html#preparing-an-observation",
+    "href": "sbi/vi-mcmc.html#preparing-an-observation",
+    "title": "VI and MCMC with iTarFlow",
+    "section": "Preparing an observation",
+    "text": "Preparing an observation\nFor this tutorial we’ll generate our observation from our SIRDS simulator. We infer the initial infected fraction \\(I_0\\), beta, gamma and omega, treating only the mortality rate as known.\n\nTRUE_I0 = 0.02\nTRUE_BETA = 0.45\nTRUE_GAMMA = 0.12\nTRUE_OMEGA = 0.025\nTRUE_MU = 0.01\n\nS_obs, I_obs, R_obs, D_obs = simulate_sirds(\n    I0=TRUE_I0, beta=TRUE_BETA, gamma=TRUE_GAMMA, omega=TRUE_OMEGA,\n    mu=TRUE_MU, T=cfg.dataset.num_timesteps, seed=999,\n)\ny_obs_raw = np.stack([S_obs, I_obs, R_obs, D_obs], axis=-1)[1:]  # drop t=0\ny_obs = torch.as_tensor(y_obs_raw, dtype=torch.float32, device=DEVICE)\ny_obs = ((y_obs - series_mean) / series_std).unsqueeze(0)",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "VI and MCMC with iTarFlow"
+    ]
+  },
+  {
+    "objectID": "sbi/vi-mcmc.html#choosing-the-prior",
+    "href": "sbi/vi-mcmc.html#choosing-the-prior",
+    "title": "VI and MCMC with iTarFlow",
+    "section": "Choosing the prior",
+    "text": "Choosing the prior\nWe’ll assume independent uniform priors: \\[\n\\begin{align}\n&I_0 \\sim \\mathcal{U}(0.01, 0.1)\\\\\n&\\beta \\sim \\mathcal{U}(0.2, 0.8)\\\\\n&\\gamma \\sim \\mathcal{U}(0.05, 0.3)\\\\\n&\\omega \\sim \\mathcal{U}(0.005, 0.05)\n\\end{align}\n\\]",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "VI and MCMC with iTarFlow"
+    ]
+  },
+  {
+    "objectID": "sbi/vi-mcmc.html#the-inference-problem",
+    "href": "sbi/vi-mcmc.html#the-inference-problem",
+    "title": "VI and MCMC with iTarFlow",
+    "section": "The inference problem",
+    "text": "The inference problem\nGiven our observation \\(x'\\), our choice of priors \\(p(\\theta)\\) and our trained surrogate we have an unnormalised posterior density,\n\\[\np(\\theta|x=x') \\propto \\hat{p}(x=x'|\\theta)p(\\theta)\n\\]\nTo obtain samples from the posterior we need to either fit a parametrised distribution or run MCMC.",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "VI and MCMC with iTarFlow"
+    ]
+  },
+  {
+    "objectID": "sbi/vi-mcmc.html#variational-inference",
+    "href": "sbi/vi-mcmc.html#variational-inference",
+    "title": "VI and MCMC with iTarFlow",
+    "section": "Variational Inference",
+    "text": "Variational Inference\nWe introduce a parametrised distribution \\(q_{\\phi}\\), in this case a multivariate Gaussian transformed to lie within the parameter bounds, and maximise the Evidence Lower Bound (ELBO): \\[\n\\max_{\\phi}\\;\\mathbb{E}_{\\theta\\sim q_{\\phi}(\\theta)}[\\log \\hat{p}(x=x'|\\theta)] - \\mathrm{KL}[q_{\\phi}(\\theta)\\,\\vert\\vert\\,p(\\theta)]\n\\]\n\n\n\n\n\n\nNote\n\n\n\nThis is equivalent to minimising the reverse KL-divergence between \\(q_{\\phi}\\) and the posterior.\n\n\nWe implement this in code using PyTorch’s distributions module.\n\nimport math\nimport torch.nn.functional as F\nimport torch.distributions as dist\n\nPARAM_BOUNDS = {\n    \"I_0\": (0.01, 0.1),\n    \"beta\": (0.2, 0.8),\n    \"gamma\": (0.05, 0.3),\n    \"omega\": (0.005, 0.05),\n}\nlo = torch.tensor([b[0] for b in PARAM_BOUNDS.values()], device=DEVICE)\nhi = torch.tensor([b[1] for b in PARAM_BOUNDS.values()], device=DEVICE)\n\nDATA_DIM = y_obs[0].numel()\n\nn_params = len(PARAM_BOUNDS)\nq_mu = nn.Parameter(torch.zeros(n_params, device=DEVICE))\nq_L_flat = nn.Parameter(torch.zeros(n_params * (n_params + 1) // 2, device=DEVICE))\n\ndef build_q():\n    L = torch.zeros(n_params, n_params, device=DEVICE)\n    idx = torch.tril_indices(n_params, n_params, device=DEVICE)\n    L[idx[0], idx[1]] = q_L_flat\n    diag_idx = torch.arange(n_params, device=DEVICE)\n    L[diag_idx, diag_idx] = F.softplus(L[diag_idx, diag_idx]) + 1e-4\n\n    base = dist.MultivariateNormal(q_mu, scale_tril=L)\n    transforms = [dist.SigmoidTransform(), dist.AffineTransform(loc=lo, scale=(hi - lo))]\n    return dist.TransformedDistribution(base, transforms)\n\nwith torch.no_grad():\n    centre = (lo + hi) / 2\n    q_mu.copy_(torch.logit((centre - lo) / (hi - lo)))\n\nprint(f\"Initial q centre (constrained): {build_q().sample().detach().cpu().numpy()}\")\n\nNow the objective:\n\ndef make_conditioning(theta_samples):\n    fixed = torch.ones_like(theta_samples[:, 0])\n    values = {\n        \"I_0\": theta_samples[:, 0],\n        \"beta\": theta_samples[:, 1],\n        \"gamma\": theta_samples[:, 2],\n        \"omega\": theta_samples[:, 3],\n        \"mu\": TRUE_MU * fixed,\n    }\n    full_params = torch.stack(\n        [values[name] for name in cfg.dataset.surrogate_input_variables],\n        dim=1,\n    )\n    return (full_params - input_mean) / input_std\n\n\ndef compute_log_likelihood(y, theta_samples):\n    n_mc = theta_samples.shape[0]\n    full_params = make_conditioning(theta_samples)\n    y_batch = y.expand(n_mc, -1, -1)\n\n    z, total_logdet_scaled = nf(y_batch, full_params)\n\n    log_pz = -0.5 * z.reshape(n_mc, -1).pow(2).sum(dim=1) \\\n             - 0.5 * DATA_DIM * math.log(2 * math.pi)\n    true_logdet = DATA_DIM * total_logdet_scaled\n    return log_pz + true_logdet\n\n\ndef compute_elbo(n_mc=32):\n    q = build_q()\n    theta_samples = q.rsample((n_mc,))\n    theta_clamped = torch.stack([\n        theta_samples[:, i].clamp(lo[i] + 1e-6, hi[i] - 1e-6)\n        for i in range(n_params)\n    ], dim=1)\n\n    log_lik = compute_log_likelihood(y_obs, theta_clamped)\n    log_q = q.log_prob(theta_clamped)\n    log_prior = -torch.log(hi - lo).sum()\n\n    return (log_lik + log_prior - log_q).mean()\n\nFinally, we optimise\n\nnf.eval()\n\nvi_optimizer = torch.optim.Adam([q_mu, q_L_flat], lr=0.02)\nn_vi_steps = 1500\nn_mc = 32\nelbo_history = []\n\nfor step in range(n_vi_steps):\n    vi_optimizer.zero_grad()\n    elbo = compute_elbo(n_mc=n_mc)\n    (-elbo).backward()\n    torch.nn.utils.clip_grad_norm_([q_mu, q_L_flat], max_norm=5.0)\n    vi_optimizer.step()\n    elbo_history.append(elbo.item())\n\n    if step % 100 == 0 or step == n_vi_steps - 1:\n        with torch.no_grad():\n            q = build_q()\n            mean_c = q.sample((1000,)).mean(dim=0)\n        means = \", \".join(\n            f\"{name}={mean_c[i]:.4f}\" for i, name in enumerate(PARAM_BOUNDS)\n        )\n        print(f\"Step {step:4d}  ELBO={elbo.item():10.1f}  q_mean=[{means}]\")\n\nNow we plot the ELBO over time and the approximate posterior:\n\nfig, ax = plt.subplots(1, 1, figsize=(8, 3))\nax.plot(elbo_history, lw=0.5, alpha=0.4, label=\"ELBO\")\nwindow = 50\nif len(elbo_history) &gt; window:\n    smoothed = np.convolve(elbo_history, np.ones(window) / window, mode=\"valid\")\n    ax.plot(np.arange(window - 1, len(elbo_history)), smoothed, lw=2, color=\"red\",\n            label=f\"{window}-step moving avg\")\nax.set(xlabel=\"VI step\", ylabel=\"ELBO\")\nax.legend()\nplt.tight_layout()\n\n# Corner plot\nwith torch.no_grad():\n    q_final = build_q()\n    posterior_samples = q_final.sample((5000,)).cpu().numpy()\n\nparam_names = [r\"$I_0$\", r\"$\\beta$\", r\"$\\gamma$\", r\"$\\omega$\"]\ntrue_vals = [TRUE_I0, TRUE_BETA, TRUE_GAMMA, TRUE_OMEGA]\nbounds = list(PARAM_BOUNDS.values())\n\nfig2, axes2 = plt.subplots(n_params, n_params, figsize=(10, 10))\nfor i in range(n_params):\n    for j in range(n_params):\n        ax = axes2[i, j]\n        if j &gt; i:\n            ax.axis(\"off\")\n            continue\n        if i == j:\n            ax.hist(posterior_samples[:, i], bins=50, density=True,\n                    color=\"steelblue\", alpha=0.7, edgecolor=\"none\")\n            ax.axvline(true_vals[i], color=\"red\", lw=2, ls=\"--\", label=\"True\")\n            ax.set_xlim(bounds[i])\n            if i == 0:\n                ax.legend(fontsize=8)\n        else:\n            ax.hist2d(posterior_samples[:, j], posterior_samples[:, i],\n                      bins=40, cmap=\"Blues\", density=True)\n            ax.axvline(true_vals[j], color=\"red\", lw=1, ls=\"--\")\n            ax.axhline(true_vals[i], color=\"red\", lw=1, ls=\"--\")\n            ax.scatter([true_vals[j]], [true_vals[i]], color=\"red\", s=30, zorder=5)\n            ax.set_xlim(bounds[j])\n            ax.set_ylim(bounds[i])\n        if j == 0:\n            ax.set_ylabel(param_names[i])\n        if i == n_params - 1:\n            ax.set_xlabel(param_names[j])\n\nplt.suptitle(r\"Approximate Posterior $q(I_0, \\beta, \\gamma, \\omega \\mid y_{obs})$\", fontsize=13)\nplt.tight_layout()\n\nFinal sanity check:\n\nwith torch.no_grad():\n    q_final = build_q()\n    theta_post = q_final.sample((10,))\n    full_params_post = make_conditioning(theta_post)\n\n    z_rand = torch.randn((10, *y_obs.shape[1:]), device=DEVICE)\n    pp_samples, _ = nf.reverse(z_rand, full_params_post)\n    pp_samples = pp_samples * series_std + series_mean\n    pp_samples = pp_samples.clamp(min=0).cpu().numpy()\n\ncolors_pp = {\"S\": \"#2E86AB\", \"I\": \"#C73E1D\", \"R\": \"#6A994E\", \"D\": \"#C21B8A\"}\n\nfig, ax = plt.subplots(1, 1, figsize=(12, 4.5))\nfor s in range(pp_samples.shape[0]):\n    for j, (label, color) in enumerate(colors_pp.items()):\n        ax.plot(pp_samples[s, :, j], color=color, alpha=0.6, lw=0.8)\n\nfor j, (label, color) in enumerate(colors_pp.items()):\n    ax.plot(y_obs_raw[:, j], color=color, lw=2.5, ls=\"--\", label=f\"{label} (observed)\")\n\nax.set(xlabel=\"time (days)\", ylabel=\"count\", title=\"Posterior Predictive Check\")\nax.legend()\nplt.tight_layout()\n\nprint(\"=\" * 60)\nprint(\"Variational Inference Results\")\nprint(\"=\" * 60)\nwith torch.no_grad():\n    vi_samples = q_final.sample((10000,)).cpu().numpy()\nfor i, (name, true_val) in enumerate(zip(PARAM_BOUNDS, true_vals)):\n    mean = vi_samples[:, i].mean()\n    std = vi_samples[:, i].std()\n    q025 = np.percentile(vi_samples[:, i], 2.5)\n    q975 = np.percentile(vi_samples[:, i], 97.5)\n    print(f\"  {name:6s}: mean={mean:.4f} +/- {std:.4f}  \"\n          f\"95% CI=[{q025:.4f}, {q975:.4f}]  true={true_val:.4f}  \"\n          f\"{'OK' if q025 &lt;= true_val &lt;= q975 else 'MISS'}\")",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "VI and MCMC with iTarFlow"
+    ]
+  },
+  {
+    "objectID": "sbi/vi-mcmc.html#mcmc",
+    "href": "sbi/vi-mcmc.html#mcmc",
+    "title": "VI and MCMC with iTarFlow",
+    "section": "MCMC",
+    "text": "MCMC\nWe can also sample from the same surrogate-based posterior using Pyro’s No-U-Turn Sampler (NUTS), an adaptive Hamiltonian Monte Carlo method. We reuse the uniform priors, observation, and compute_log_likelihood above; the mortality rate remains fixed.\nPyro is optional. Install it into the project’s environment before continuing (the package is named pyro-ppl, but imported as pyro):\n\n%%bash\nuv pip install pyro-ppl\n\nEach pyro.sample declares a parameter’s prior. pyro.factor adds the surrogate log-likelihood to the joint log density. Pyro handles the transforms between bounded parameters and the unconstrained space used by NUTS. Keep gradients enabled through the surrogate, just as for VI.\n\nimport pyro\nimport pyro.distributions as pyro_dist\nfrom pyro.infer import MCMC, NUTS\n\npyro.set_rng_seed(42)\n\ndef posterior_model():\n    theta = torch.stack([\n        pyro.sample(name, pyro_dist.Uniform(lo[i], hi[i]))\n        for i, name in enumerate(PARAM_BOUNDS)\n    ])\n    log_lik = compute_log_likelihood(y_obs, theta.unsqueeze(0))[0]\n    pyro.factor(\"surrogate_likelihood\", log_lik)\n\nWarmup adapts the step size and mass matrix, and its draws are discarded. We use a full mass matrix to accommodate correlations between the parameters. This example runs one chain for straightforward notebook execution.\n\nkernel = NUTS(posterior_model, full_mass=True, target_accept_prob=0.8)\nmcmc = MCMC(kernel, warmup_steps=500, num_samples=1000, num_chains=1)\nmcmc.run()\nmcmc.summary(prob=0.95)\n\nmcmc_draws = mcmc.get_samples()\ntheta_mcmc = torch.stack([mcmc_draws[name] for name in PARAM_BOUNDS], dim=1)\nmcmc_samples = theta_mcmc.detach().cpu().numpy()\n\nInspect the effective sample sizes, divergences, and trace plots before interpreting the posterior. The single-chain summary uses a split-chain R-hat; it does not replace checking agreement across independently initialized chains. Increase warmup or sampling length if mixing is poor.\n\nMCMC trace plots\nPlot the retained MCMC draws in sampling order to inspect mixing. Dashed lines mark the true parameter values.\n\nfig, axes = plt.subplots(n_params, 1, figsize=(10, 2.5 * n_params), sharex=True)\nfor i, name in enumerate(PARAM_BOUNDS):\n    axes[i].plot(mcmc_samples[:, i], lw=0.6)\n    axes[i].axhline(true_vals[i], color=\"red\", ls=\"--\", label=\"True\")\n    axes[i].set(ylabel=param_names[i])\naxes[-1].set_xlabel(\"MCMC draw\")\naxes[0].legend()\nplt.tight_layout()\n\n\n\nMCMC posterior predictive check\nFinally, draw trajectories conditional on samples from the MCMC posterior, using the same conditioning and inverse normalization as for VI.\n\nwith torch.no_grad():\n    selected = torch.randperm(theta_mcmc.shape[0], device=theta_mcmc.device)[:10]\n    conditioning = make_conditioning(theta_mcmc[selected])\n    z_rand = torch.randn((len(selected), *y_obs.shape[1:]), device=DEVICE)\n    mcmc_pp, _ = nf.reverse(z_rand, conditioning)\n    mcmc_pp = (mcmc_pp * series_std + series_mean).clamp(min=0).cpu().numpy()\n\nfig, ax = plt.subplots(figsize=(12, 4.5))\nfor sample in mcmc_pp:\n    for j, (label, color) in enumerate(colors_pp.items()):\n        ax.plot(sample[:, j], color=color, alpha=0.6, lw=0.8)\nfor j, (label, color) in enumerate(colors_pp.items()):\n    ax.plot(y_obs_raw[:, j], color=color, lw=2.5, ls=\"--\", label=f\"{label} (observed)\")\nax.set(xlabel=\"time (days)\", ylabel=\"count\", title=\"MCMC Posterior Predictive Check\")\nax.legend()\nplt.tight_layout()\n\n\n\nVI and MCMC posterior comparison\nOverlay the marginal densities on the diagonal and joint samples below it to compare both uncertainty and correlations. The joint panels show an equal number of draws from each method; dashed lines mark the true parameters.\n\nfig, axes = plt.subplots(n_params, n_params, figsize=(10, 10))\ncomparison_samples = [(\"VI\", posterior_samples, \"steelblue\"),\n                      (\"MCMC\", mcmc_samples, \"darkorange\")]\nn_show = min(1000, len(posterior_samples), len(mcmc_samples))\nfor i in range(n_params):\n    for j in range(n_params):\n        ax = axes[i, j]\n        if j &gt; i:\n            ax.axis(\"off\")\n            continue\n        if i == j:\n            bins = np.linspace(*bounds[i], 60)\n            for label, samples, color in comparison_samples:\n                ax.hist(samples[:, i], bins=bins, density=True,\n                        histtype=\"step\", lw=1.8, color=color, label=label)\n            ax.axvline(true_vals[i], color=\"black\", ls=\"--\", label=\"True\")\n            ax.set_xlim(bounds[i])\n        else:\n            for label, samples, color in comparison_samples:\n                ax.scatter(samples[:n_show, j], samples[:n_show, i],\n                           s=5, alpha=0.15, color=color, rasterized=True)\n            ax.axvline(true_vals[j], color=\"black\", ls=\"--\", lw=1)\n            ax.axhline(true_vals[i], color=\"black\", ls=\"--\", lw=1)\n            ax.set_xlim(bounds[j])\n            ax.set_ylim(bounds[i])\n        if j == 0:\n            ax.set_ylabel(\"Density\" if i == 0 else param_names[i])\n        if i == n_params - 1:\n            ax.set_xlabel(param_names[j])\naxes[0, 0].legend()\nfig.suptitle(\"VI and MCMC posterior comparison\")\nplt.tight_layout()",
+    "crumbs": [
+      "Home",
+      "SBI",
+      "VI and MCMC with iTarFlow"
+    ]
+  }
+]

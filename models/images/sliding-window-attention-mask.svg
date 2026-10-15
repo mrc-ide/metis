@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="450" viewBox="0 0 500 450" role="img" aria-labelledby="title description">
+  <title id="title">Sliding-window causal attention mask</title>
+  <desc id="description">An eight by eight causal attention mask where each query can attend to itself and at most four earlier keys.</desc>
+  <style>
+    .label { font: 600 15px system-ui, sans-serif; fill: #172033; }
+    .position { font: 14px system-ui, sans-serif; fill: #526174; text-anchor: middle; dominant-baseline: middle; }
+  </style>
+  <rect width="500" height="450" fill="#ffffff"/>
+  <text x="298" y="32" class="label" text-anchor="middle">key</text>
+  <text x="-243" y="58" class="label" text-anchor="middle" transform="rotate(-90)">query</text>
+  <g transform="translate(130 60)">
+    <g class="position">
+      <text x="21" y="-16">x1</text><text x="63" y="-16">x2</text><text x="105" y="-16">x3</text><text x="147" y="-16">x4</text>
+      <text x="189" y="-16">x5</text><text x="231" y="-16">x6</text><text x="273" y="-16">x7</text><text x="315" y="-16">x8</text>
+    </g>
+    <g class="position" text-anchor="end">
+      <text x="-16" y="21">x1</text><text x="-16" y="63">x2</text><text x="-16" y="105">x3</text><text x="-16" y="147">x4</text>
+      <text x="-16" y="189">x5</text><text x="-16" y="231">x6</text><text x="-16" y="273">x7</text><text x="-16" y="315">x8</text>
+    </g>
+    <rect width="336" height="336" fill="#edf1f5"/>
+    <path fill="#16806f" d="M0 0h42v42H0zM0 42h84v42H0zM0 84h126v42H0zM0 126h168v42H0zM0 168h210v42H0zM42 210h210v42H42zM84 252h210v42H84zM126 294h210v42H126z"/>
+    <g fill="none" stroke="#ffffff" stroke-width="3">
+      <path d="M42 0v336M84 0v336M126 0v336M168 0v336M210 0v336M252 0v336M294 0v336"/>
+      <path d="M0 42h336M0 84h336M0 126h336M0 168h336M0 210h336M0 252h336M0 294h336"/>
+    </g>
+  </g>
+</svg>

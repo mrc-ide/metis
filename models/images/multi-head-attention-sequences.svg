@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="450" viewBox="0 0 720 450" role="img" aria-labelledby="title description">
+  <title id="title">Multi-head attention over sequences</title>
+  <desc id="description">Four attention heads, each containing query, key, and value matrices for the full input sequence.</desc>
+  <style>
+    .row { font: 600 18px system-ui, sans-serif; fill: #172033; text-anchor: end; }
+    .head { font: 600 15px system-ui, sans-serif; fill: #526174; text-anchor: middle; }
+    .entry { font: 12px system-ui, sans-serif; fill: #172033; text-anchor: middle; dominant-baseline: middle; }
+  </style>
+  <rect width="720" height="450" fill="#ffffff"/>
+  <g transform="translate(0 -70)">
+
+  <text x="222" y="105" class="head">h = 1</text>
+  <text x="342" y="105" class="head">h = 2</text>
+  <text x="462" y="105" class="head">h = 3</text>
+  <text x="582" y="105" class="head">h = H</text>
+  <text x="160" y="186" class="row">Values</text>
+  <text x="160" y="316" class="row">Keys</text>
+  <text x="160" y="446" class="row">Queries</text>
+
+  <g stroke="#172f4f" stroke-width="2.5">
+    <path d="M222 226v49M222 356v49M342 226v49M342 356v49M462 226v49M462 356v49M582 226v49M582 356v49" stroke="#718096" stroke-dasharray="4 5"/>
+    <g fill="#d8e7f7"><rect x="190" y="120" width="64" height="106" rx="5"/><rect x="310" y="120" width="64" height="106" rx="5"/><rect x="430" y="120" width="64" height="106" rx="5"/><rect x="550" y="120" width="64" height="106" rx="5"/></g>
+    <g fill="#dcefe9"><rect x="190" y="250" width="64" height="106" rx="5"/><rect x="310" y="250" width="64" height="106" rx="5"/><rect x="430" y="250" width="64" height="106" rx="5"/><rect x="550" y="250" width="64" height="106" rx="5"/></g>
+    <g fill="#f7ead7"><rect x="190" y="380" width="64" height="106" rx="5"/><rect x="310" y="380" width="64" height="106" rx="5"/><rect x="430" y="380" width="64" height="106" rx="5"/><rect x="550" y="380" width="64" height="106" rx="5"/></g>
+    <g stroke="#8fa3ba" stroke-width="1.5"><path d="M190 146h64M190 172h64M190 198h64M310 146h64M310 172h64M310 198h64M430 146h64M430 172h64M430 198h64M550 146h64M550 172h64M550 198h64"/></g>
+    <g stroke="#8eafaa" stroke-width="1.5"><path d="M190 276h64M190 302h64M190 328h64M310 276h64M310 302h64M310 328h64M430 276h64M430 302h64M430 328h64M550 276h64M550 302h64M550 328h64"/></g>
+    <g stroke="#c7a77f" stroke-width="1.5"><path d="M190 406h64M190 432h64M190 458h64M310 406h64M310 432h64M310 458h64M430 406h64M430 432h64M430 458h64M550 406h64M550 432h64M550 458h64"/></g>
+  </g>
+  <g class="entry">
+    <text x="222" y="133">v<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="222" y="159">v<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="222" y="185">...</text><text x="222" y="211">v<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="342" y="133">v<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="342" y="159">v<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="342" y="185">...</text><text x="342" y="211">v<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="462" y="133">v<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="462" y="159">v<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="462" y="185">...</text><text x="462" y="211">v<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="582" y="133">v<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="582" y="159">v<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="582" y="185">...</text><text x="582" y="211">v<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="222" y="263">k<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="222" y="289">k<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="222" y="315">...</text><text x="222" y="341">k<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="342" y="263">k<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="342" y="289">k<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="342" y="315">...</text><text x="342" y="341">k<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="462" y="263">k<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="462" y="289">k<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="462" y="315">...</text><text x="462" y="341">k<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="582" y="263">k<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="582" y="289">k<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="582" y="315">...</text><text x="582" y="341">k<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="222" y="393">q<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="222" y="419">q<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="222" y="445">...</text><text x="222" y="471">q<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="342" y="393">q<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="342" y="419">q<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="342" y="445">...</text><text x="342" y="471">q<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="462" y="393">q<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="462" y="419">q<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="462" y="445">...</text><text x="462" y="471">q<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="582" y="393">q<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="582" y="419">q<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="582" y="445">...</text><text x="582" y="471">q<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+  </g>
+  </g>
+</svg>

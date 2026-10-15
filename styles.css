@@ -1,0 +1,6 @@
+/* Custom styles for the METIS docs site. */
+
+/* Slightly wider content column for code-heavy pages. */
+.page-columns {
+  --mermaid-bg-color: transparent;
+}

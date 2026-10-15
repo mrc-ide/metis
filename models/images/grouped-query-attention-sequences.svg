@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="510" viewBox="0 0 720 510" role="img" aria-labelledby="title description">
+  <title id="title">Grouped-query attention over sequences</title>
+  <desc id="description">Four query heads share two key-value heads. Every block contains a full projected sequence.</desc>
+  <style>
+    .row { font: 600 18px system-ui, sans-serif; fill: #172033; text-anchor: end; }
+    .head { font: 600 15px system-ui, sans-serif; fill: #526174; text-anchor: middle; }
+    .entry { font: 12px system-ui, sans-serif; fill: #172033; text-anchor: middle; dominant-baseline: middle; }
+    .group { font: 14px system-ui, sans-serif; fill: #526174; text-anchor: middle; }
+  </style>
+  <rect width="720" height="510" fill="#ffffff"/>
+  <text x="120" y="104" class="row">Values</text>
+  <text x="120" y="234" class="row">Keys</text>
+  <text x="120" y="434" class="row">Queries</text>
+
+  <text x="272" y="32" class="head">Shared K/V head g = 1</text>
+  <text x="512" y="32" class="head">Shared K/V head g = 2</text>
+  <text x="212" y="320" class="head">Q head h = 1</text>
+  <text x="332" y="320" class="head">Q head h = 2</text>
+  <text x="452" y="320" class="head">Q head h = 3</text>
+  <text x="572" y="320" class="head">Q head h = 4</text>
+
+  <g stroke="#172f4f" stroke-width="2.5">
+    <path d="M272 146v44M512 146v44" stroke="#718096" stroke-dasharray="4 5"/>
+    <path d="M272 296v34H212v40M272 330h60v40M512 296v34H452v40M512 330h60v40" fill="none" stroke="#718096" stroke-dasharray="4 5"/>
+    <g fill="#d8e7f7"><rect x="240" y="40" width="64" height="106" rx="5"/><rect x="480" y="40" width="64" height="106" rx="5"/></g>
+    <g fill="#dcefe9"><rect x="240" y="190" width="64" height="106" rx="5"/><rect x="480" y="190" width="64" height="106" rx="5"/></g>
+    <g fill="#f7ead7"><rect x="180" y="370" width="64" height="106" rx="5"/><rect x="300" y="370" width="64" height="106" rx="5"/><rect x="420" y="370" width="64" height="106" rx="5"/><rect x="540" y="370" width="64" height="106" rx="5"/></g>
+    <g stroke="#8fa3ba" stroke-width="1.5"><path d="M240 66h64M240 92h64M240 118h64M480 66h64M480 92h64M480 118h64"/></g>
+    <g stroke="#8eafaa" stroke-width="1.5"><path d="M240 216h64M240 242h64M240 268h64M480 216h64M480 242h64M480 268h64"/></g>
+    <g stroke="#c7a77f" stroke-width="1.5"><path d="M180 396h64M180 422h64M180 448h64M300 396h64M300 422h64M300 448h64M420 396h64M420 422h64M420 448h64M540 396h64M540 422h64M540 448h64"/></g>
+  </g>
+  <g class="entry">
+    <text x="272" y="53">v<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="272" y="79">v<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="272" y="105">...</text><text x="272" y="131">v<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="512" y="53">v<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="512" y="79">v<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="512" y="105">...</text><text x="512" y="131">v<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="272" y="203">k<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="272" y="229">k<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="272" y="255">...</text><text x="272" y="281">k<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="512" y="203">k<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="512" y="229">k<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="512" y="255">...</text><text x="512" y="281">k<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="212" y="383">q<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="212" y="409">q<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="212" y="435">...</text><text x="212" y="461">q<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="332" y="383">q<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="332" y="409">q<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="332" y="435">...</text><text x="332" y="461">q<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="452" y="383">q<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="452" y="409">q<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="452" y="435">...</text><text x="452" y="461">q<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+    <text x="572" y="383">q<tspan baseline-shift="sub" font-size="9">1</tspan></text><text x="572" y="409">q<tspan baseline-shift="sub" font-size="9">2</tspan></text><text x="572" y="435">...</text><text x="572" y="461">q<tspan baseline-shift="sub" font-size="9">N</tspan></text>
+  </g>
+</svg>

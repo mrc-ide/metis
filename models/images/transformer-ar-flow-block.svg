@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="470" height="410" viewBox="0 0 470 410" role="img" aria-labelledby="title description">
+  <title id="title">Transformer autoregressive flow block</title>
+  <desc id="description">A causal transformer maps a permuted latent sequence to autoregressive parameters, which are combined with the sequence through an affine flow transformation.</desc>
+  <style>
+    .math { font: italic 15px "DejaVu Serif", serif; fill: #000; text-anchor: middle; dominant-baseline: middle; }
+    .formula { font: italic 12px "DejaVu Serif", serif; fill: #000; }
+    .label { font: 700 15.5px "DejaVu Sans", sans-serif; fill: #000; text-anchor: middle; }
+    .block { font: 700 15.5px "DejaVu Sans", sans-serif; fill: #000; text-anchor: middle; dominant-baseline: middle; }
+    .dot { font: 17px "Times New Roman", Times, serif; fill: #000; text-anchor: middle; }
+  </style>
+  <defs>
+    <marker id="orange-arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0L10 5L0 10z" fill="#f5a000"/>
+    </marker>
+  </defs>
+
+  <rect width="470" height="410" fill="#effeff"/>
+
+  <!-- Output sequence -->
+  <g fill="#c9c5f1" stroke="#f5f5ff" stroke-width="2">
+    <rect x="11" y="9" width="49" height="49"/><rect x="60" y="9" width="49" height="49"/>
+    <rect x="109" y="9" width="49" height="49"/><rect x="158" y="9" width="49" height="49"/>
+    <rect x="207" y="9" width="49" height="49"/><rect x="256" y="9" width="49" height="49"/>
+    <rect x="305" y="9" width="49" height="49"/><rect x="354" y="9" width="49" height="49"/>
+    <rect x="403" y="9" width="50" height="49"/>
+  </g>
+  <g class="math">
+    <text x="35.5" y="34">X̃₀⁺¹</text><text x="84.5" y="34">X̃₁⁺¹</text><text x="133.5" y="34">X̃₂⁺¹</text>
+    <text x="182.5" y="34">X̃₃⁺¹</text><text x="231.5" y="34">X̃₄⁺¹</text><text x="280.5" y="34">X̃₅⁺¹</text>
+    <text x="329.5" y="34">X̃₆⁺¹</text><text x="378.5" y="34">X̃₇⁺¹</text><text x="428" y="34">X̃₈⁺¹</text>
+  </g>
+
+  <!-- Affine flow equation and recurrent orange path -->
+  <text x="6" y="81" class="formula">(X̃ᵢ − μᵢ) ⊙ exp(−αᵢ)</text>
+  <text x="224" y="82" font-family="Times New Roman, Times, serif" font-size="24" fill="#f5a000">⊕</text>
+  <path d="M453 282H464V76H241" fill="none" stroke="#f5a000" stroke-width="1.6" marker-end="url(#orange-arrow)"/>
+
+  <!-- Causal-transformer parameters -->
+  <g fill="#c7edfd">
+    <rect x="4" y="96" width="49" height="60"/><rect x="91" y="96" width="50" height="60"/>
+    <rect x="207" y="96" width="50" height="60"/><rect x="369" y="96" width="48" height="60"/>
+  </g>
+  <g fill="#fee8ef" stroke="#e6c8d1" stroke-width="1">
+    <rect x="31" y="108" width="48" height="48"/><rect x="119" y="108" width="48" height="48"/>
+    <rect x="246" y="108" width="48" height="48"/><rect x="399" y="108" width="48" height="48"/>
+  </g>
+  <g class="math">
+    <text x="17" y="130">α₀</text><text x="55" y="135">μ₀</text><text x="104" y="130">α₁</text><text x="143" y="135">μ₁</text>
+    <text x="231" y="130">αᵢ</text><text x="270" y="135">μᵢ</text><text x="382" y="130">α₈</text><text x="423" y="135">μ₈</text>
+  </g>
+  <text x="189" y="135" class="dot">⋯</text><text x="324" y="135" class="dot">⋯</text>
+
+  <path d="M232 176V169" fill="none" stroke="#f5a000" stroke-width="1.6"/>
+  <path d="M232 160L227 169H237z" fill="#f5a000"/>
+  <rect x="15" y="176" width="434" height="64" rx="12" fill="#d6aea3" stroke="#e3d6d2" stroke-width="1.5"/>
+  <text x="232" y="209" font-family="DejaVu Sans, sans-serif" font-size="15.5" font-weight="700" text-anchor="middle" dominant-baseline="middle">Causal Transformer</text>
+  <text x="338" y="209" font-family="DejaVu Serif, serif" font-size="15" font-style="italic" font-weight="700" text-anchor="middle" dominant-baseline="middle">T(x)</text>
+
+  <!-- Permuted latent sequence -->
+  <path d="M232 258V251" fill="none" stroke="#f5a000" stroke-width="1.6"/>
+  <path d="M232 242L227 251H237z" fill="#f5a000"/>
+  <g fill="#c9c5f1" stroke="#f5f5ff" stroke-width="2">
+    <rect x="11" y="258" width="49" height="49"/><rect x="60" y="258" width="49" height="49"/>
+    <rect x="109" y="258" width="49" height="49"/><rect x="158" y="258" width="49" height="49"/>
+    <rect x="207" y="258" width="49" height="49"/><rect x="256" y="258" width="49" height="49"/>
+    <rect x="305" y="258" width="49" height="49"/><rect x="354" y="258" width="49" height="49"/>
+    <rect x="403" y="258" width="50" height="49"/>
+  </g>
+  <g class="math">
+    <text x="35.5" y="283">X̃₀</text><text x="84.5" y="283">X̃₁</text><text x="133.5" y="283">X̃₂</text><text x="182.5" y="283">X̃₃</text><text x="231.5" y="283">X̃₄</text><text x="280.5" y="283">X̃₅</text><text x="329.5" y="283">X̃₆</text><text x="378.5" y="283">X̃₇</text><text x="428" y="283">X̃₈</text>
+  </g>
+
+  <text x="7" y="333" font-family="DejaVu Sans, sans-serif" font-size="15.5" font-weight="700">Permutation π(x)</text>
+  <path d="M232 351V318" fill="none" stroke="#f5a000" stroke-width="1.6"/>
+  <path d="M232 309L227 318H237z" fill="#f5a000"/>
+
+  <!-- Input latent sequence -->
+  <g fill="#c9c5f1" stroke="#f5f5ff" stroke-width="2">
+    <rect x="11" y="351" width="49" height="49"/><rect x="60" y="351" width="49" height="49"/>
+    <rect x="109" y="351" width="49" height="49"/><rect x="158" y="351" width="49" height="49"/>
+    <rect x="207" y="351" width="49" height="49"/><rect x="256" y="351" width="49" height="49"/>
+    <rect x="305" y="351" width="49" height="49"/><rect x="354" y="351" width="49" height="49"/>
+    <rect x="403" y="351" width="50" height="49"/>
+  </g>
+  <g class="math">
+    <text x="35.5" y="376">X₀</text><text x="84.5" y="376">X₁</text><text x="133.5" y="376">X₂</text><text x="182.5" y="376">X₃</text><text x="231.5" y="376">X₄</text><text x="280.5" y="376">X₅</text><text x="329.5" y="376">X₆</text><text x="378.5" y="376">X₇</text><text x="428" y="376">X₈</text>
+  </g>
+</svg>

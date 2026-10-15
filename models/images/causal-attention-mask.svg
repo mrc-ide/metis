@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="480" viewBox="0 0 920 480" role="img" aria-labelledby="title description">
+  <title id="title">Causal self-attention mask</title>
+  <desc id="description">The input at x4 attends to x1 through x4, but not the future input x5.</desc>
+  <style>
+    .label { font: 600 16px system-ui, sans-serif; fill: #172033; }
+    .small { font: 14px system-ui, sans-serif; fill: #526174; }
+    .token { font: 600 17px system-ui, sans-serif; fill: #172033; text-anchor: middle; dominant-baseline: middle; }
+    .cell { font: 700 18px system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+  </style>
+  <rect width="920" height="480" fill="#ffffff"/>
+  <g transform="translate(0 -70)">
+  <text x="40" y="129" class="label">Sequence</text>
+  <line x1="65" y1="172" x2="452" y2="172" stroke="#bbc5d2" stroke-width="2"/>
+  <path d="M452 172 l-10 -6 v12 z" fill="#bbc5d2"/>
+  <g>
+    <rect x="75" y="145" width="54" height="54" rx="8" fill="#e9eef5" stroke="#9eacbd"/><text x="102" y="172" class="token">x1</text>
+    <rect x="150" y="145" width="54" height="54" rx="8" fill="#e9eef5" stroke="#9eacbd"/><text x="177" y="172" class="token">x2</text>
+    <rect x="225" y="145" width="54" height="54" rx="8" fill="#e9eef5" stroke="#9eacbd"/><text x="252" y="172" class="token">x3</text>
+    <rect x="300" y="145" width="54" height="54" rx="8" fill="#cceae5" stroke="#16806f" stroke-width="2"/><text x="327" y="172" class="token">x4</text>
+    <rect x="375" y="145" width="54" height="54" rx="8" fill="#f5e6e6" stroke="#c77a7a"/><text x="402" y="172" class="token">x5</text>
+  </g>
+  <text x="300" y="224" class="small">query at x4</text>
+  <text x="526" y="129" class="label">Attention mask</text>
+  <text x="695" y="151" class="small" text-anchor="middle">key</text>
+  <text x="-357" y="480" class="small" text-anchor="middle" transform="rotate(-90)">query</text>
+  <g transform="translate(530 192)">
+    <g class="small" text-anchor="middle"><text x="33" y="-12">x1</text><text x="99" y="-12">x2</text><text x="165" y="-12">x3</text><text x="231" y="-12">x4</text><text x="297" y="-12">x5</text></g>
+    <g class="small" text-anchor="end" dominant-baseline="middle"><text x="-12" y="33">x1</text><text x="-12" y="99">x2</text><text x="-12" y="165">x3</text><text x="-12" y="231">x4</text><text x="-12" y="297">x5</text></g>
+    <g stroke="#ffffff" stroke-width="3">
+      <path fill="#16806f" d="M0 0h66v66H0zM0 66h132v66H0zM0 132h198v66H0zM0 264h330v66H0z"/>
+      <path fill="#cceae5" d="M0 198h264v66H0z"/>
+      <path fill="#edf1f5" d="M66 0h264v66H66zM132 66h198v66H132zM198 132h132v66H198z"/>
+      <path fill="#f5e6e6" d="M264 198h66v66h-66z"/>
+    </g>
+    <g stroke="#ffffff" stroke-width="3" fill="none"><path d="M66 0v66M132 0v132M198 0v198M264 0v264M0 66h330M0 132h330M0 198h330M0 264h330"/></g>
+    <g class="cell" fill="#ffffff"><text x="33" y="33">✓</text><text x="33" y="99">✓</text><text x="99" y="99">✓</text><text x="33" y="165">✓</text><text x="99" y="165">✓</text><text x="165" y="165">✓</text><text x="33" y="231">✓</text><text x="99" y="231">✓</text><text x="165" y="231">✓</text><text x="231" y="231">✓</text><text x="33" y="297">✓</text><text x="99" y="297">✓</text><text x="165" y="297">✓</text><text x="231" y="297">✓</text><text x="297" y="297">✓</text></g>
+    <text x="297" y="231" class="cell" fill="#c77a7a">×</text>
+    <rect x="-3" y="195" width="336" height="72" fill="none" stroke="#16806f" stroke-width="3"/>
+  </g>
+  </g>
+</svg>
