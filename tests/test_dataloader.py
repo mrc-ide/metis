@@ -1,19 +1,18 @@
+import polars as pl
 import pytest
 import torch
-import polars as pl
+
 from dataloader import (
+    clean_df,
     get_data_iterator,
     get_random_batch,
-    prepare_splits,
-    clean_df,
     left_truncate_and_recalculate_static_inputs,
     make_tensors,
+    prepare_splits,
 )
 
 
-@pytest.mark.parametrize(
-    "config_name", ["model_sims", "res_sims", "resnmf_sims", "resnmfhigh_sims"]
-)
+@pytest.mark.parametrize("config_name", ["sirds"])
 def test_dataset_configs_load(config_name):
     """Very basic test to check that we can parse all the configs"""
     import hydra
