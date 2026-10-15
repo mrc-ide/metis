@@ -4,6 +4,8 @@ project:
 
 website:
   title: "METIS"
+  site-url: https://mrc-ide.github.io/metis/
+  repo-url: https://github.com/mrc-ide/metis
   description: "Configurable neural network surrogate models for stochastic timeseries simulators"
   page-navigation: true
   navbar:
@@ -12,7 +14,7 @@ website:
         text: Home
     right:
       - icon: github
-        href: https://github.com/  # TODO: repo URL
+        href: https://github.com/mrc-ide/metis
         aria-label: GitHub
   sidebar:
     style: docked
