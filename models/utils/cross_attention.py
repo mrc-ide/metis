@@ -1,7 +1,8 @@
-import torch
-import torch.nn as nn
 from dataclasses import dataclass
+
+import torch
 import torch.nn.functional as F
+from torch import nn
 
 
 def norm(x: torch.Tensor) -> torch.Tensor:
@@ -81,39 +82,61 @@ class CrossAttnKVCache:
 class CrossAttention(nn.Module):
     def __init__(
         self,
-        config,  # untyped for now as it can be any of the models configs
+        config,  # CrossAttentionConfig, or a model config for existing callers
         layer_idx: int,
+        *,
+        n_embd: int | None = None,
     ):
         super().__init__()
-        self.n_head = config.cross_attn.n_head
-        self.n_kv_head = config.cross_attn.n_kv_head
-        self.embd_dim = config.n_embd
+        if isinstance(config, CrossAttentionConfig):
+            if n_embd is None:
+                raise ValueError("n_embd is required with CrossAttentionConfig")
+            attention_config = config
+        else:
+            attention_config = config.cross_attn
+        self.n_head = attention_config.n_head
+        self.n_kv_head = attention_config.n_kv_head
+        self.embd_dim = config.n_embd if n_embd is None else n_embd
         self.head_dim = self.embd_dim // self.n_head
         self.layer_idx = layer_idx
 
         # Ensure embedding dim is divisible by n_head
         assert self.embd_dim % self.n_head == 0
+        assert self.head_dim % 2 == 0, "RoPE requires an even head dimension"
         # Ensure number of kv heads is correct, this allows us to do MHA or GQA
         assert self.n_kv_head <= self.n_head and self.n_head % self.n_kv_head == 0
 
         self.c_q = nn.Linear(
-            self.embd_dim, self.n_head * self.head_dim, bias=config.cross_attn.qkv_bias
+            self.embd_dim, self.n_head * self.head_dim, bias=attention_config.qkv_bias
         )
         self.c_k = nn.Linear(
             self.embd_dim,
             self.n_kv_head * self.head_dim,
-            bias=config.cross_attn.qkv_bias,
+            bias=attention_config.qkv_bias,
         )
         self.c_v = nn.Linear(
             self.embd_dim,
             self.n_kv_head * self.head_dim,
-            bias=config.cross_attn.qkv_bias,
+            bias=attention_config.qkv_bias,
         )
         # TODO: Do we want bias=False?
         self.c_proj = nn.Linear(self.embd_dim, self.embd_dim, bias=False)
 
         # Zero-init output projection so cross-attention starts as a no-op
         nn.init.zeros_(self.c_proj.weight)
+
+    def prepare_kv(self, cond, cos_sin_cond, kv_cache: CrossAttnKVCache):
+        """Populate fixed observed K/V independently of the first query position."""
+        k, v = self._project_kv(cond, cos_sin_cond)
+        kv_cache.k_cache[self.layer_idx] = k
+        kv_cache.v_cache[self.layer_idx] = v
+        kv_cache.populated[self.layer_idx] = True
+
+    def _project_kv(self, cond, cos_sin_cond):
+        batch, length, _ = cond.shape
+        k = self.c_k(cond).view(batch, length, self.n_kv_head, self.head_dim)
+        v = self.c_v(cond).view(batch, length, self.n_kv_head, self.head_dim)
+        return norm(apply_rotary_emb(k, *cos_sin_cond)), v
 
     # TODO: Support sparse conditioning sequences
     def forward(
@@ -125,12 +148,10 @@ class CrossAttention(nn.Module):
         kv_cache: CrossAttnKVCache | None = None,
         current_x_pos: int | None = None,
     ) -> torch.Tensor:
-        B, T, C = x.size()
+        B, T, _ = x.size()
 
         if cond is not None:
-            B_cond, T_cond, C_cond = cond.size()
-
-            assert B == B_cond, (
+            assert B == cond.shape[0], (
                 "Batches between x-sequence and the conditioning sequence must match"
             )
 
@@ -149,10 +170,7 @@ class CrossAttention(nn.Module):
             assert cos_sin_cond is not None, (
                 "Need cos_sin for conditioning sequence when kv cache is none or unpopulated"
             )
-            k = self.c_k(cond).view(B, T_cond, self.n_kv_head, self.head_dim)
-            v = self.c_v(cond).view(B, T_cond, self.n_kv_head, self.head_dim)
-            k = apply_rotary_emb(k, *cos_sin_cond)
-            k = norm(k)
+            k, v = self._project_kv(cond, cos_sin_cond)
             use_causual = True  # Ensure that do not allow x to attend to the future
 
             if (

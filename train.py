@@ -13,13 +13,13 @@ import polars as pl
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
+import wandb
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 from tqdm import tqdm
 
-import wandb
 from dataloader import (
     DatasetConfig,
     DatasetMeansAndStds,
@@ -477,6 +477,17 @@ def generate_comparison_plot(
             )
     elif "itarflow" in cfg.model._target_:
         assert isinstance(model, ImprovedTARFlow)
+        cond_seq = None
+        means = data_targets_means_and_stds.means
+        stds = data_targets_means_and_stds.stds
+        if obs_idx is not None:
+            obs_raw = outputs_tensor.quantile(q=0.5, dim=1)[:, obs_idx, :]
+            cond_seq = (
+                (obs_raw.to(device) - means[obs_idx].to(device))
+                / stds[obs_idx].to(device)
+            ).permute(0, 2, 1)
+            means = means[pred_idx]
+            stds = stds[pred_idx]
         generated, _ = model.reverse(
             torch.randn(
                 (
@@ -487,14 +498,12 @@ def generate_comparison_plot(
                 device=model.get_device(),
             ),
             surrogate_input[:, 0, :],
+            cond_seq=cond_seq,
         )
         generated = (
             (
-                generated
-                * data_targets_means_and_stds.stds.transpose(1, 0)[None, ...].to(device)
-                + data_targets_means_and_stds.means.transpose(1, 0)[None, ...].to(
-                    device
-                )
+                generated * stds.transpose(1, 0)[None, ...].to(device)
+                + means.transpose(1, 0)[None, ...].to(device)
             )
             .detach()
             .cpu()
@@ -507,6 +516,7 @@ def generate_comparison_plot(
         generated.shape[0],
         n_plot,
         figsize=(n_plot * 8, 5 * generated.shape[0]),
+        squeeze=False,
     )
     if keep_greater_than_zero:
         generated = np.maximum(0, generated)
@@ -668,15 +678,24 @@ def run_training(
             cfg.model.sit.data_dim = len(cfg.dataset.output_variables)
             pred_and_obs_idx = None
     elif "itarflow" in cfg.model._target_:
-        # NOTE: obs_idx (sequence cond) unsupported for now
+        all_out = cfg.dataset.output_variables
         if obs_vars:
-            raise NotImplementedError(
-                "Itarflow model does not support sequence conditioning"
-            )
-        cfg.model.out_channels = len(cfg.dataset.output_variables)
+            if cfg.model.cross_attn is None:
+                raise ValueError("Observed sequences require cross_attn configuration")
+            obs_idx = [all_out.index(v) for v in obs_vars]
+            pred_idx = [i for i, v in enumerate(all_out) if v not in obs_vars]
+            if not pred_idx:
+                raise ValueError("TARFlow requires at least one predicted channel")
+            pred_and_obs_idx = (pred_idx, obs_idx)
+            cfg.model.cross_attn.cond_dim = len(obs_idx)
+            cfg.model.out_channels = len(pred_idx)
+        else:
+            if cfg.model.cross_attn is not None:
+                raise ValueError("Cross-attention requires observed_output_variables")
+            cfg.model.out_channels = len(all_out)
+            pred_and_obs_idx = None
         cfg.model.num_timesteps = cfg.dataset.num_timesteps
         cfg.model.static_in = len(cfg.dataset.surrogate_input_variables)
-        pred_and_obs_idx = None
 
     else:
         raise ValueError(f"Cannot identify model with target {cfg.model._target_}")

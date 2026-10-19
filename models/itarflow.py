@@ -3,6 +3,7 @@
 # Transformer-based autoregressive normalising flow
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import torch
@@ -10,6 +11,12 @@ import torch.nn.functional as F
 from torch import nn
 
 from models.transformer import norm
+from models.utils.cross_attention import (
+    CrossAttention,
+    CrossAttentionConfig,
+    CrossAttnKVCache,
+    precompute_rotary_embeddings,
+)
 
 
 @dataclass
@@ -28,9 +35,12 @@ class iTarFlowConfig:
     weight_init_constant: float = 0.32
     # dtype: Any = torch.float32
     clip_range: float = 1.0
+    cross_attn: CrossAttentionConfig | None = None
 
 
 def create_itarflow(**kwargs):
+    if isinstance(kwargs.get("cross_attn"), Mapping):
+        kwargs["cross_attn"] = CrossAttentionConfig(**kwargs["cross_attn"])
     return ImprovedTARFlow(iTarFlowConfig(**kwargs))
 
 
@@ -136,12 +146,12 @@ class ConditionalRoPEAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = channels // self.num_heads
 
-        init_kwargs = dict(
-            in_features=channels,
-            out_features=channels,
-            bias=False,
-            init_constant=weight_init_constant,
-        )
+        init_kwargs = {
+            "in_features": channels,
+            "out_features": channels,
+            "bias": False,
+            "init_constant": weight_init_constant,
+        }
         self.q_proj = iMFLinear(**init_kwargs)
         self.k_proj = iMFLinear(**init_kwargs)
         self.v_proj = iMFLinear(**init_kwargs)
@@ -160,7 +170,6 @@ class ConditionalRoPEAttention(nn.Module):
     ):
         num_heads = self.num_heads
         B, T_seq, C = seq.shape
-        activation_dtype = seq.dtype
 
         q, k, v = self.q_proj(seq), self.k_proj(seq), self.v_proj(seq)
 
@@ -254,6 +263,10 @@ class FinalLayer(nn.Module):
 
 
 class InContextMetaBlock(nn.Module):
+    rope_freqs: torch.Tensor
+    cross_cos: torch.Tensor
+    cross_sin: torch.Tensor
+
     def __init__(
         self,
         in_channels,
@@ -265,9 +278,10 @@ class InContextMetaBlock(nn.Module):
         permutation,
         dtype,
         num_static_tokens: int = 8,
-        mlp_ratio: int = 8 / 3,
+        mlp_ratio: float = 8 / 3,
         weight_init_constant: float = 0.32,
-        clip_range: float = None,
+        clip_range: float | None = None,
+        cross_attn: CrossAttentionConfig | None = None,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -314,6 +328,15 @@ class InContextMetaBlock(nn.Module):
             ]
         )
         self.final_layer = FinalLayer(channels, in_channels, dtype=dtype)
+        self.has_cross_attn = cross_attn is not None
+        if cross_attn is not None:
+            self.cond_proj = nn.Linear(cross_attn.cond_dim, channels)
+            self.cross_attn = CrossAttention(cross_attn, layer_idx=0, n_embd=channels)
+            cos, sin = precompute_rotary_embeddings(
+                num_patches, self.cross_attn.head_dim
+            )
+            self.register_buffer("cross_cos", cos)
+            self.register_buffer("cross_sin", sin)
 
     def build_attn_mask(self, device):
         T_c = self.prefix_tokens
@@ -332,7 +355,7 @@ class InContextMetaBlock(nn.Module):
         static_tokens = self.static_tokens.unsqueeze(0) + static_embed.unsqueeze(1)
         return static_tokens
 
-    def forward(self, x, static):
+    def forward(self, x, static, cond_seq=None):
         x_in = self.permutation(x)
         x = self.proj_in(x_in)
         c_attn = self._build_c_attn(static)
@@ -345,8 +368,18 @@ class InContextMetaBlock(nn.Module):
                 mask=mask,
             )
         seq = seq[:, self.prefix_tokens :]
-        x = self.final_layer(seq)  # [B,T,2*C]
-        x = torch.cat([torch.zeros_like(x[:, :1]), x[:, :-1]], dim=1)
+        if self.has_cross_attn:
+            # h[i] predicts patch i+1. Align targets before restoring time order.
+            seq = torch.cat([torch.zeros_like(seq[:, :1]), seq[:, :-1]], dim=1)
+            seq = self.permutation(seq)
+            rope = (self.cross_cos, self.cross_sin)
+            seq = seq + self.cross_attn(norm(seq), self.cond_proj(cond_seq), rope, rope)
+            x = self.permutation(self.final_layer(seq))
+            # The first patch in block order remains an identity transformation.
+            x = torch.cat([torch.zeros_like(x[:, :1]), x[:, 1:]], dim=1)
+        else:
+            x = self.final_layer(seq)  # [B,T,2*C]
+            x = torch.cat([torch.zeros_like(x[:, :1]), x[:, :-1]], dim=1)
         if self.clip_range is not None:
             x = torch.clamp(x, min=-self.clip_range, max=self.clip_range)
         alpha, mu = x.chunk(2, dim=-1)
@@ -356,10 +389,24 @@ class InContextMetaBlock(nn.Module):
         x_new = self.permutation(x_new)
         return x_new, log_jacob, alpha, mu
 
-    def reverse(self, x, static):
+    def reverse(self, x, static, cond_seq=None):
         x_recon = self.permutation(x).clone()
-        B, T, C = x_recon.shape
+        B, T, _ = x_recon.shape
         T_c = self.prefix_tokens
+        if self.has_cross_attn:
+            cond = self.cond_proj(cond_seq)
+            cross_cache = CrossAttnKVCache(
+                B,
+                self.cross_attn.n_kv_head,
+                T,
+                self.cross_attn.head_dim,
+                1,
+                x.device,
+                cond.dtype,
+            )
+            self.cross_attn.prepare_kv(
+                cond, (self.cross_cos, self.cross_sin), cross_cache
+            )
 
         def _make_cache():
             return [
@@ -409,6 +456,21 @@ class InContextMetaBlock(nn.Module):
                     v_cache=v_cache[bi],
                 )
 
+            if self.has_cross_attn:
+                # Map the next patch in block order to its original timestep.
+                # Flipped blocks reconstruct original timesteps in descending order.
+                target_pos = T - 2 - i if self.permutation.flip else i + 1
+                rope = (
+                    self.cross_cos[:, target_pos : target_pos + 1],
+                    self.cross_sin[:, target_pos : target_pos + 1],
+                )
+                x_step = x_step + self.cross_attn(
+                    norm(x_step),
+                    None,
+                    rope,
+                    kv_cache=cross_cache,
+                    current_x_pos=target_pos,
+                )
             out = self.final_layer(x_step)
             if self.clip_range is not None:
                 out = torch.clamp(out, min=-self.clip_range, max=self.clip_range)
@@ -420,7 +482,7 @@ class InContextMetaBlock(nn.Module):
             )
 
         # Reverse log-det: pad with zero for token 0 (untransformed)
-        alphas_tensor = torch.cat([torch.zeros_like(alphas[0]), *alphas], dim=1)
+        alphas_tensor = torch.cat([torch.zeros_like(x_recon[:, :1]), *alphas], dim=1)
         reverse_logdet = alphas_tensor.mean(dim=(1, 2))
 
         return self.permutation(x_recon), reverse_logdet, alphas_tensor
@@ -434,6 +496,8 @@ class ImprovedTARFlow(nn.Module):
         super().__init__()
 
         self.config = config
+        if config.cross_attn is not None and config.patch_size != 1:
+            raise ValueError("Cross-attention requires patch_size == 1")
         self.num_timesteps = config.num_timesteps
         self.out_channels = config.out_channels
         self.patch_size = config.patch_size
@@ -460,6 +524,7 @@ class ImprovedTARFlow(nn.Module):
                     mlp_ratio=self.config.mlp_ratio,
                     weight_init_constant=self.config.weight_init_constant,
                     clip_range=self.config.clip_range,
+                    cross_attn=self.config.cross_attn,
                 )
                 for i in range(self.config.num_blocks)
             ]
@@ -480,21 +545,42 @@ class ImprovedTARFlow(nn.Module):
         u = x.reshape(B, patched_T * self.patch_size, patched_C // self.patch_size)
         return u
 
-    def forward(self, x: torch.Tensor, static_conditioning: torch.Tensor):
+    def _validate_conditioning(self, x, cond_seq):
+        if self.config.cross_attn is None:
+            if cond_seq is not None:
+                raise ValueError(
+                    "Sequence conditioning requires cross_attn configuration"
+                )
+        elif cond_seq is None or cond_seq.shape != (
+            x.shape[0],
+            self.num_timesteps,
+            self.config.cross_attn.cond_dim,
+        ):
+            raise ValueError(
+                "cond_seq must have shape (batch, num_timesteps, cond_dim)"
+            )
+
+    def forward(
+        self, x: torch.Tensor, static_conditioning: torch.Tensor, cond_seq=None
+    ):
+        self._validate_conditioning(x, cond_seq)
         x = self.patchify(x)  # [B, T, C * patch_size^2]
 
         total_logdet = 0.0
         for block in self.blocks:
-            x, logdet, alpha, mu = block(x, static_conditioning)
+            x, logdet, _, _ = block(x, static_conditioning, cond_seq)
             total_logdet += logdet
         x = self.unpatchify(x)
         return x, total_logdet
 
-    def reverse(self, x: torch.Tensor, static_conditioning: torch.Tensor):
+    def reverse(
+        self, x: torch.Tensor, static_conditioning: torch.Tensor, cond_seq=None
+    ):
+        self._validate_conditioning(x, cond_seq)
         x = self.patchify(x)
         total_reverse_logdet = torch.zeros(x.shape[0], device=x.device, dtype=x.dtype)
         for block in reversed(self.blocks):
-            x, block_logdet, _ = block.reverse(x, static_conditioning)
+            x, block_logdet, _ = block.reverse(x, static_conditioning, cond_seq)
             total_reverse_logdet += block_logdet
         x = self.unpatchify(x)
         return x, total_reverse_logdet
@@ -532,17 +618,18 @@ class ImprovedTARFlow(nn.Module):
     def compute_loss(
         self,
         static_input: torch.Tensor,
-        x: torch.Tensor,
+        x: torch.Tensor | None,
         targets: torch.Tensor,
         mask: torch.Tensor | None = None,
         pred_and_obs_idx: tuple[list[int], list[int]] | None = None,
     ) -> torch.Tensor:
-        if pred_and_obs_idx:
-            raise ValueError(
-                "Improved TarFlow does not yet support sequence conditioning"
-            )
+        cond_seq = None
+        if pred_and_obs_idx is not None:
+            pred_idx, obs_idx = pred_and_obs_idx
+            cond_seq = targets[:, :, obs_idx]
+            targets = targets[:, :, pred_idx]
         # NOTE: TarFlow models mean reduce their log-dets
-        z, total_logdet = self.forward(targets, static_input)
+        z, total_logdet = self.forward(targets, static_input, cond_seq)
 
         # Maximum Likelihood Estimation via instantaneous change of variables
         log_prior = 0.5 * (z**2)
