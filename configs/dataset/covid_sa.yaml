@@ -1,0 +1,10 @@
+surrogate_input_variables: ['log_omega', 'log_rho', 'log_i0', 'log_phi_c', 'log_phi_d']
+grouping_variables: [param_id]
+output_variables: [log_cases, log_deaths, log_R_t, log_ifr_t]
+observed_output_variables: [log_R_t, log_ifr_t]
+num_timesteps: 123
+path: examples/covid_sa_data.parquet
+reps_for_comparison_plot: 2
+trunc_until: null
+input_col_to_source_col: null
+exclude_output_variables: null

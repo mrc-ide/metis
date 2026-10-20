@@ -1,0 +1,9 @@
+defaults:
+  - itarflow_default
+  - _self_
+
+cross_attn:
+  n_head: 4
+  n_kv_head: 4
+  cond_dim: 1  # inferred from observed_output_variables
+  qkv_bias: true
