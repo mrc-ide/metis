@@ -33,6 +33,8 @@ sampling:
   generate_samples: true
   samples_name: hrp_2026_02_02_transformer_sota.pdf
   subsample: 50
+  use_kv_cache: true #For transformer this means we use kv-cache for self-attention and cross-attn (once implemented). 
+                      #For SiT, enables it for cross-attention, has no affect on MLP
 
 
 checkpointer:
