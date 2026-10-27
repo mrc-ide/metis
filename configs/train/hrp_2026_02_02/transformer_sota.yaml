@@ -5,7 +5,6 @@ defaults:
 
 
 model:
-  input_dim: 8
   n_layer: 15
   n_head: 16
   n_kv_head: 8
