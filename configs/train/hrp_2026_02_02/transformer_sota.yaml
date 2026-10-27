@@ -1,0 +1,40 @@
+defaults:
+  - model: transformer_default
+  - dataset: hrp_2026_02_02
+  - _self_
+
+
+model:
+  input_dim: 8
+  n_layer: 15
+  n_head: 16
+  n_kv_head: 8
+  rope_base: 10000
+  n_embd: 256
+  in_and_out_biases: true
+  window_pattern: SSL
+max_steps: 10000
+eval_every: 100
+peak_lr: 0.0004095945167945864
+lr_warmup_frac: 0.05
+batch_size: 64
+num_gpus: 1
+precision: bf16
+deterministic: false
+seed: 42
+plot_loss_curves: false
+logger:
+  use_wandb: false
+  project: my_wandb_project
+  tags:
+  - transformer
+  - hrp_2026_02_02
+sampling:
+  generate_samples: true
+  samples_name: hrp_2026_02_02_transformer_sota.pdf
+  subsample: 50
+
+
+hydra:
+  searchpath:
+    - file://configs

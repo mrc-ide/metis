@@ -1,0 +1,34 @@
+defaults:
+  - model: mlp_default
+  - dataset: hrp_2026_02_02
+  - _self_
+
+model:
+  num_blocks: 17
+  hidden_dim: 256
+  num_layers_per_block: 2
+
+max_steps: 10000
+eval_every: 100
+peak_lr: 0.005559140992420665
+lr_warmup_frac: 0.1
+batch_size: 256
+num_gpus: 1
+precision: bf16
+deterministic: false
+seed: 42
+plot_loss_curves: false
+logger:
+  use_wandb: false
+  project: my_wandb_project
+  tags:
+  - mlp
+  - hrp_2026_02_02
+sampling:
+  generate_samples: true
+  samples_name: hrp_2026_02_02_mlp_sota.pdf
+  subsample: 50
+
+hydra:
+  searchpath:
+    - file://configs

@@ -1,0 +1,40 @@
+defaults:
+  - model: flow_matching_default
+  - dataset: hrp_2026_02_02
+  - _self_
+
+model:
+  sit:
+    n_blocks: 13
+    n_head: 16
+    n_kv_head: 8
+    qkv_bias: false
+    embd_dim: 128
+    cond_dropout_prob: 0.0
+    in_and_out_biases: true
+
+max_steps: 20000
+eval_every: 100
+peak_lr: 0.009650886806079983
+lr_warmup_frac: 0.4
+batch_size: 512
+num_gpus: 1
+precision: bf16
+deterministic: false
+seed: 42
+plot_loss_curves: false
+logger:
+  use_wandb: false
+  project: my_wandb_project
+  tags:
+  - flow_matching
+  - hrp_2026_02_02
+sampling:
+  generate_samples: true
+  samples_name: hrp_2026_02_02_flow_matching_sota.pdf
+  subsample: 50
+
+
+hydra:
+  searchpath:
+    - file://configs
