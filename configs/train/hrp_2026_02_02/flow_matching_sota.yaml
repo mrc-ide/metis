@@ -30,6 +30,7 @@ logger:
   - flow_matching
   - hrp_2026_02_02
 sampling:
+  keep_greater_than_zero: false
   generate_samples: true
   samples_name: hrp_2026_02_02_flow_matching_sota.pdf
   subsample: 50
