@@ -29,6 +29,10 @@ sampling:
   samples_name: hrp_2026_02_02_mlp_sota.pdf
   subsample: 50
 
+checkpointer:
+  save_every: 10000
+  resume_from: null
+
 hydra:
   searchpath:
     - file://configs

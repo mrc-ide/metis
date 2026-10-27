@@ -35,6 +35,10 @@ sampling:
   subsample: 50
 
 
+checkpointer:
+  save_every: 10000
+  resume_from: null
+
 hydra:
   searchpath:
     - file://configs

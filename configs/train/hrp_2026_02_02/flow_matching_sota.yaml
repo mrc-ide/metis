@@ -34,6 +34,9 @@ sampling:
   samples_name: hrp_2026_02_02_flow_matching_sota.pdf
   subsample: 50
 
+checkpointer:
+  save_every: 20000
+  resume_from: null
 
 hydra:
   searchpath:
