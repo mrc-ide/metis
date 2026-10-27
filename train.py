@@ -102,9 +102,28 @@ def step_seed(seed: int, step: int, runtime: DistributedRuntime, stream: int) ->
 
 
 def save_checkpoint(
-    path, cfg, step, model, optimiser, train_losses, val_losses, val_steps
+    path,
+    cfg,
+    step,
+    model,
+    optimiser,
+    input_means_and_stds,
+    target_means_and_stds,
+    train_losses,
+    val_losses,
+    val_steps,
 ):
     checkpoint = {
+        "normalisation": {
+            "inputs": {
+                "mean": input_means_and_stds.means.detach().cpu(),
+                "std": input_means_and_stds.stds.detach().cpu(),
+            },
+            "targets": {
+                "mean": target_means_and_stds.means.detach().cpu(),
+                "std": target_means_and_stds.stds.detach().cpu(),
+            },
+        },
         "config": OmegaConf.to_container(cfg, resolve=True),
         "step": step,
         "model": model.state_dict(),
@@ -717,6 +736,52 @@ def run_training(
         cfg.dataset.trunc_until,
         cfg.dataset.input_col_to_source_col,
     )
+    # NOTE: Weight decay is currently hardcoded
+    optimiser = model.setup_optimiser(0.001, cfg.peak_lr)
+
+    start_step = 0
+    train_losses: list[float] = []
+    val_losses: list[float] = []
+    val_steps: list[int] = []
+    if cfg.checkpointer.resume_from is not None:
+        ckpt = torch.load(
+            cfg.checkpointer.resume_from, map_location="cpu", weights_only=False
+        )
+        model.load_state_dict(ckpt["model"])
+        optimiser.load_state_dict(ckpt["optimiser"])
+        train_losses = ckpt["train_losses"].tolist()
+        val_losses = ckpt["val_losses"]
+        val_steps = ckpt["val_steps"]
+        start_step = ckpt["step"] + 1
+        input_means_and_stds = DatasetMeansAndStds(
+            ckpt["normalisation"]["inputs"]["mean"],
+            ckpt["normalisation"]["inputs"]["std"],
+        )
+        target_means_and_stds = DatasetMeansAndStds(
+            ckpt["normalisation"]["targets"]["mean"],
+            ckpt["normalisation"]["targets"]["std"],
+        )
+        # Resuming reproduces an uninterrupted run only if the sampling and the
+        # learning-rate schedule are unchanged
+        changed = [
+            key
+            for key in (
+                "seed",
+                "num_gpus",
+                "batch_size",
+                "max_steps",
+                "peak_lr",
+                "lr_warmup_frac",
+            )
+            if ckpt["config"][key] != getattr(cfg, key)
+        ]
+        if runtime.is_main:
+            print(
+                f"\nResumed from {cfg.checkpointer.resume_from}. This includes (amongst other things) model weights, optimiser state and data z-scaling values."
+            )
+            if changed:
+                print(f"Note: {changed} differ from the checkpoint's config")
+
     train_static_input_data, train_x_data, _, _ = make_tensors(
         train_df,
         cfg.dataset.surrogate_input_variables,
@@ -750,42 +815,6 @@ def run_training(
     # batch_size is the global batch size, split evenly across GPUs
     local_batch_size = cfg.batch_size // runtime.world_size
     gen = torch.Generator(model.get_device())  # Reseeded every step, see step_seed
-    # NOTE: Weight decay is currently hardcoded
-    optimiser = model.setup_optimiser(0.001, cfg.peak_lr)
-    # TODO: Print num. params
-
-    start_step = 0
-    train_losses: list[float] = []
-    val_losses: list[float] = []
-    val_steps: list[int] = []
-    if cfg.checkpointer.resume_from is not None:
-        ckpt = torch.load(
-            cfg.checkpointer.resume_from, map_location="cpu", weights_only=False
-        )
-        model.load_state_dict(ckpt["model"])
-        optimiser.load_state_dict(ckpt["optimiser"])
-        train_losses = ckpt["train_losses"].tolist()
-        val_losses = ckpt["val_losses"]
-        val_steps = ckpt["val_steps"]
-        start_step = ckpt["step"] + 1
-        # Resuming reproduces an uninterrupted run only if the sampling and the
-        # learning-rate schedule are unchanged
-        changed = [
-            key
-            for key in (
-                "seed",
-                "num_gpus",
-                "batch_size",
-                "max_steps",
-                "peak_lr",
-                "lr_warmup_frac",
-            )
-            if ckpt["config"][key] != getattr(cfg, key)
-        ]
-        if runtime.is_main:
-            print(f"\nResumed from {cfg.checkpointer.resume_from}")
-            if changed:
-                print(f"Note: {changed} differ from the checkpoint's config")
 
     # model: optimiser, checkpoints and sample generation
     # loss_module: evaluation (compiled)
@@ -920,6 +949,8 @@ def run_training(
                     step,
                     model,
                     optimiser,
+                    input_means_and_stds,
+                    target_means_and_stds,
                     train_losses,
                     val_losses,
                     val_steps,

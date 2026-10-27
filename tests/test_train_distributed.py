@@ -7,6 +7,7 @@ import torch.multiprocessing as mp
 from omegaconf import OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 
+from dataloader import DatasetMeansAndStds
 from models.mlp import ResidualMLP, ResidualMLPConfig
 from train import (
     DistributedRuntime,
@@ -62,10 +63,27 @@ def test_checkpoint_round_trips_and_leaves_no_temporary_files(tmp_path, mlp_mode
     optimiser = torch.optim.AdamW(mlp_model.parameters())
     cfg = OmegaConf.create({"seed": 1})
     path = tmp_path / "checkpoint.pt"
+    input_stats = DatasetMeansAndStds(
+        means=torch.tensor([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]),
+        stds=torch.tensor([[0.5, 0.5, 0.5], [1.5, 1.5, 1.5]]),
+    )
+    target_stats = DatasetMeansAndStds(
+        means=torch.tensor([[10.0, 20.0, 30.0]]),
+        stds=torch.tensor([[2.0, 3.0, 4.0]]),
+    )
 
     for step in (3, 4):  # The second save overwrites the first
         save_checkpoint(
-            path, cfg, step, mlp_model, optimiser, [1.0, 0.5], [0.75], [step]
+            path,
+            cfg,
+            step,
+            mlp_model,
+            optimiser,
+            input_stats,
+            target_stats,
+            [1.0, 0.5],
+            [0.75],
+            [step],
         )
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
 
@@ -73,6 +91,10 @@ def test_checkpoint_round_trips_and_leaves_no_temporary_files(tmp_path, mlp_mode
     assert checkpoint["config"] == {"seed": 1}
     assert checkpoint["val_steps"] == [4]
     torch.testing.assert_close(checkpoint["train_losses"], torch.tensor([1.0, 0.5]))
+    for name, expected in (("inputs", input_stats), ("targets", target_stats)):
+        saved_stats = checkpoint["normalisation"][name]
+        torch.testing.assert_close(saved_stats["mean"], expected.means)
+        torch.testing.assert_close(saved_stats["std"], expected.stds)
     mlp_model.load_state_dict(checkpoint["model"])
     optimiser.load_state_dict(checkpoint["optimiser"])
     assert list(tmp_path.iterdir()) == [path]
