@@ -1,4 +1,4 @@
-program: train
+program: train #Used a budget of 100 runs
 project: my_wandb_project
 metric:
   name: final_val_loss
