@@ -1,0 +1,57 @@
+program: train
+project: my_wandb_project
+metric:
+  name: final_val_loss
+  goal: minimize
+
+method: bayes
+parameters:
+  #Fixed
+  sampling.generate_samples:
+    value: false
+  dataset: 
+    value: hrp_2026_02_02
+  plot_loss_curves:
+    value: false
+  model:
+    value: mlp_default
+  logger.use_wandb:
+    value: true
+  logger.tags:
+    value: [mlp, hrp_2026_02_02]
+
+  #Params to optimise
+  peak_lr:
+    min: 0.000001
+    max: 0.01 
+    distribution: log_uniform_values
+  batch_size: 
+    values: [64, 128, 256, 512]
+  max_steps: 
+    values: [5000, 10000, 20000]
+  lr_warmup_frac: 
+    values: [0.0, 0.05, 0.1, 0.2, 0.3, 0.4]
+  model.num_blocks: 
+    min: 5
+    max: 20
+    distribution: int_uniform
+  model.hidden_dim: 
+    values: [128, 256, 512, 1024]
+  model.num_layers_per_block: 
+    values: [2, 3, 4]
+
+
+command:
+- ${env}
+- ${interpreter}
+- "-m"
+- ${program}
+- "--config-name"
+- "default"
+#These hydra options disable the creation of
+#output folders for all the runs
+- "hydra.output_subdir=null"
+- "hydra/job_logging=disabled"
+- "hydra/hydra_logging=disabled"
+- "hydra.run.dir=."
+- ${args_no_hyphens}
