@@ -1,0 +1,67 @@
+program: train
+project: my_wandb_project
+metric:
+  name: final_val_loss
+  goal: minimize
+
+method: bayes
+parameters:
+  #Fixed
+  sampling.generate_samples:
+    value: false
+  dataset: 
+    value: truncated_magenta_2026_02_24
+  plot_loss_curves:
+    value: false
+  model:
+    value: flow_matching_default
+  logger.use_wandb:
+    value: true
+  logger.tags:
+    value: [flow_matching, truncated_magenta_2026_02_24]
+  model.sit.cond_dropout_prob: 
+    value: 0.0  # No classifier free guidance
+  model.sit.n_kv_head: 
+    value: 8  
+  
+
+  #Params to optimise
+  peak_lr:
+    min: 0.000001
+    max: 0.01 
+    distribution: log_uniform_values
+  batch_size: 
+    values: [64, 128, 256, 512]
+  max_steps: 
+    values: [5000, 10000, 20000]
+  lr_warmup_frac: 
+    values: [0.0, 0.05, 0.1, 0.2, 0.3, 0.4]
+  model.sit.n_blocks: 
+    min: 6
+    max: 16
+    distribution: int_uniform
+  model.sit.n_head:  
+    values: [8,16]
+  model.sit.qkv_bias:  
+    values: [False,True]
+  model.sit.embd_dim:  
+    values: [64,128,256]
+  model.sit.in_and_out_biases: 
+    values: [False,True]
+
+
+
+command:
+- ${env}
+- ${interpreter}
+- "-m"
+- ${program}
+- "--config-name"
+- "default"
+#These hydra options disable the creation of
+#output folders for all the runs
+- "hydra.output_subdir=null"
+- "hydra/job_logging=disabled"
+- "hydra/hydra_logging=disabled"
+- "hydra.run.dir=."
+- ${args_no_hyphens}
