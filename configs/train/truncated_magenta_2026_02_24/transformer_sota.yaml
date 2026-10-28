@@ -1,0 +1,47 @@
+defaults:
+  - model: transformer_default
+  - dataset: truncated_magenta_2026_02_24
+  - _self_
+
+model:
+  n_layer: 7
+  n_head: 8
+  n_kv_head: 8
+  rope_base: 10000
+  n_embd: 256
+  in_and_out_biases: true
+  window_pattern: SL
+
+max_steps: 20000
+eval_every: 100
+peak_lr: 1.2384694887702894e-06
+lr_warmup_frac: 0.2
+batch_size: 512
+num_gpus: 1
+precision: bf16
+deterministic: false
+seed: 42
+plot_loss_curves: false
+logger:
+  use_wandb: false
+  project: malaria_surrogates_imperial
+  tags:
+  - baseline_nano_chat_arch
+  - truncated_magenta_2026_02_24
+sampling:
+  generate_samples: true
+  samples_name: truncated_magenta_2026_02_24_sota_final_relu_transformer.pdf
+  keep_greater_than_zero: true
+  use_kv_cache: false
+  subsample: 50
+
+
+checkpointer:
+  save_every: 20000
+  resume_from: null
+
+
+hydra:
+  searchpath:
+    - file://configs
+

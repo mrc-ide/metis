@@ -1,0 +1,68 @@
+defaults:
+  - model: transformer_default
+  - dataset: truncated_magenta_2026_02_24
+  - _self_
+
+dataset:
+  observed_output_variables:
+    #- pfpr210
+    #- ft
+    - a_1
+    - a_2
+    - a_3
+    - a_4
+    - a_5
+    - a_6
+    - tf
+    #- al
+   # - asaq
+   # - dhappq
+   # - art_res
+   # - ppq_res
+   # - aq_res
+   # - lu_res
+
+model:
+  n_layer: 15
+  n_head: 16
+  n_kv_head: 8
+  rope_base: 10000
+  n_embd: 256
+  in_and_out_biases: true
+  window_pattern: SSL
+  cross_attn:
+    n_head: 16
+    cond_dim: 2
+    n_kv_head: 8
+    qkv_bias: true
+
+max_steps: 10000
+eval_every: 100
+peak_lr: 0.0004095945167945864
+lr_warmup_frac: 0.05
+batch_size: 64
+num_gpus: 1
+precision: bf16
+deterministic: false
+seed: 42
+plot_loss_curves: false
+logger:
+  use_wandb: false
+  project: test
+  tags: []
+sampling:
+  generate_samples: true
+  samples_name: trunc_res_sims_cross_attn_transformer.pdf
+  keep_greater_than_zero: true
+  use_kv_cache: false
+  subsample: 50
+
+
+checkpointer:
+  save_every: 10000
+  resume_from: null
+
+
+hydra:
+  searchpath:
+    - file://configs
