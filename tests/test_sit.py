@@ -1,5 +1,6 @@
 import torch
-from models.sit import SiT, SiTConfig, InterpolantTransformer, LinearInterpolant
+
+from models.sit import InterpolantTransformer, LinearInterpolant, SiT, SiTConfig
 from models.utils.cross_attention import CrossAttention, CrossAttentionConfig
 
 
@@ -218,6 +219,7 @@ def test_cross_attention_training():
     )
     model = InterpolantTransformer(cfg, LinearInterpolant())
     model.train()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-2)
     B, T = 8, cfg.sequence_len
     x_1 = torch.randn(B, T, cfg.data_dim)
     x_0 = torch.randn(B, T, cfg.data_dim)
@@ -248,3 +250,19 @@ def test_cross_attention_training():
         p.grad is not None and torch.any(p.grad != 0) for p in model.parameters()
     )
     assert has_grad, "At least one parameter should have non-zero gradients"
+
+    optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
+    output = model.v_t(I_t, t, y, cond_seq=cond_seq)
+    torch.nn.functional.mse_loss(output, dot_I_t).backward()
+
+    for index, block in enumerate(model.sit.blocks):
+        for name, parameter in block.cross_attn.named_parameters():
+            if name.endswith("weight"):
+                assert parameter.grad is not None, (
+                    f"No gradient for block {index} cross-attention {name}"
+                )
+                assert torch.isfinite(parameter.grad).all()
+                assert torch.any(parameter.grad != 0), (
+                    f"Zero gradient for block {index} cross-attention {name} after one step"
+                )
