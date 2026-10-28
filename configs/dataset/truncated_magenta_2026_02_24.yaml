@@ -1,0 +1,8 @@
+defaults:
+  - magenta_2026_02_24@_here_ #With the @_here_ keyword, The resulting package is the same as the containing config (config_group). https://hydra.cc/docs/advanced/overriding_packages/
+  - _self_ 
+
+num_timesteps: 486 #Have to explicitly specify number of timesteps after truncation, a bit of a pain-point
+trunc_until: 20.0 #i.e. drop all points within year 10
+input_col_to_source_col: {}
+observed_output_variables: null

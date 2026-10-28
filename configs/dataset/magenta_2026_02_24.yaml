@@ -1,0 +1,44 @@
+surrogate_input_variables:
+ - al
+ - asaq
+ - dhappq
+ - art_res
+ - ppq_res
+ - aq_res
+ - lu_res
+ - ft
+
+grouping_variables:
+  - al
+  - asaq
+  - dhappq
+  - art_res
+  - ppq_res
+  - aq_res
+  - lu_res
+  - eir
+  - ft
+
+output_variables:
+  - cases
+  - prev
+  - micro210
+  - tf
+  - lcf
+  - all_cases
+  - deaths
+  - lcf_deaths
+  - a_1
+  - a_2
+  - a_3
+  - a_4
+  - a_5
+  - a_6
+
+num_timesteps: 608
+path: data/magenta_2026_02_24/realisations.parquet
+trunc_until: null
+input_col_to_source_col: null
+observed_output_variables: null
+exclude_output_variables: null
+reps_for_comparison_plot: 10
