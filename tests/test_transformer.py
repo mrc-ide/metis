@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
-from models.transformer import Transformer, TransformerConfig, Block
+
+from models.transformer import Block, Transformer, TransformerConfig
 from models.utils.cross_attention import CrossAttentionConfig
 
 
@@ -477,6 +478,9 @@ def test_cross_attn_kv_cache_generate_matches_naive_generate():
     model = Transformer(cfg)
     model.init_weights()
 
+    # Ensure the cross-attention projection is non-zero
+    for block in model.h:
+        torch.nn.init.kaiming_normal(block.cross_attn.c_proj.weight)
     model.eval()
 
     # Given only static and cond seq

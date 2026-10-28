@@ -290,7 +290,6 @@ class Block(nn.Module):
         cond: torch.Tensor | None = None,
         cos_sin_cond: tuple[torch.Tensor, torch.Tensor] | None = None,
     ) -> torch.Tensor:
-        x = x + self.attn(norm(x), cos_sin_x, window_size, kv_cache)
         if self.has_cross_attn:
             if cross_kv_cache is not None:
                 # A populated cross-attn cache only exists during cached
@@ -303,6 +302,8 @@ class Block(nn.Module):
             else:
                 current_x_pos = None
 
+        x = x + self.attn(norm(x), cos_sin_x, window_size, kv_cache)
+        if self.has_cross_attn:
             x = x + self.cross_attn(
                 norm(x), cond, cos_sin_x, cos_sin_cond, cross_kv_cache, current_x_pos
             )
