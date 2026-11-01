@@ -1,17 +1,15 @@
-# Mixture of various diffusion transformer implementations adapted to sequences
-# Isn't really a SiT anymore but not sure what else to call it
+# Linear Flow Matching with a non-causal transformer adapted to sequences.
 # https://github.com/willisma/SiT
 # https://github.com/LTH14/JiT/blob/main/model_jit.py
-import torch
-import torch.nn as nn
-from functools import partial
-from itertools import repeat
-import collections.abc
 import math
-from models.transformer import apply_rotary_emb, norm
-import torch.nn.functional as F
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Protocol
+
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+from models.transformer import apply_rotary_emb, norm
 from models.utils.cross_attention import (
     CrossAttention,
     CrossAttentionConfig,
@@ -19,7 +17,11 @@ from models.utils.cross_attention import (
 
 
 @dataclass
-class SiTConfig:
+class FlowMatchingTransformerConfig:
+    _target_: str = "models.sit.create_flow_matching_transformer"
+    num_steps: int | None = 50
+    solver: str | None = "heun"
+    multi_mode: str = "median"
     sequence_len: int = 256
     data_dim: int = 8
     cond_dim: int = 8
@@ -28,85 +30,36 @@ class SiTConfig:
     n_kv_head: int = 8  # number of key/value heads (GQA)
     qkv_bias: bool = True
     embd_dim: int = 64
-    cond_dropout_prob: float = 0.1  # For classifier free guidance
+    cond_dropout_prob: float = 0.0
+    # Controls data/conditioning input projections; the final layer always has a bias.
     in_and_out_biases: bool = True
     cross_attn: CrossAttentionConfig | None = None
 
 
-@dataclass
-class InterpolantTransformerConfig:
-    _target_: str = "models.sit.create_interpolant_transformer"
-    interpolant: str | None = None
-    num_steps: int | None = None
-    solver: str | None = None
-    multi_mode: str | None = None
-    sit: SiTConfig | None = None
+def create_flow_matching_transformer(**kwargs):
+    if isinstance(kwargs.get("cross_attn"), Mapping):
+        kwargs["cross_attn"] = CrossAttentionConfig(**kwargs["cross_attn"])
+    return FlowMatchingTransformer(FlowMatchingTransformerConfig(**kwargs))
 
 
-def create_interpolant_transformer(interpolant, **sit_conf_kwargs):
-    return InterpolantTransformer(
-        SiTConfig(**sit_conf_kwargs["sit"]), INTERPOLANTS[interpolant]
-    )
-
-
-# https://github.com/pprp/timm/blob/master/timm/layers/helpers.py#L19
-# From PyTorch internals
-def _ntuple(n):
-    def parse(x):
-        if isinstance(x, collections.abc.Iterable) and not isinstance(x, str):
-            return tuple(x)
-        return tuple(repeat(x, n))
-
-    return parse
-
-
-to_1tuple = _ntuple(1)
-to_2tuple = _ntuple(2)
-to_3tuple = _ntuple(3)
-to_4tuple = _ntuple(4)
-to_ntuple = _ntuple
-
-
-# https://github.com/pprp/timm/blob/master/timm/layers/mlp.py#L13
-# vit, dit, sit MLP
 class Mlp(nn.Module):
-    """MLP as used in Vision Transformer, MLP-Mixer and related networks"""
+    """Transformer feed-forward layer with a fixed expansion ratio of four."""
 
-    def __init__(
-        self,
-        in_features: int,
-        hidden_features: int | None = None,
-        out_features: int | None = None,
-        act_layer=nn.GELU,
-        bias: bool = True,
-        drop: float = 0.0,
-    ):
+    def __init__(self, embd_dim: int):
         super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        bias = to_2tuple(bias)
-        drop_probs = to_2tuple(drop)
-
-        self.fc1 = nn.Linear(in_features, hidden_features, bias=bias[0])
-        self.act = act_layer()
-        self.drop1 = nn.Dropout(drop_probs[0])
-        self.fc2 = nn.Linear(hidden_features, out_features, bias=bias[1])
-        self.drop2 = nn.Dropout(drop_probs[1])
+        self.fc1 = nn.Linear(embd_dim, 4 * embd_dim)
+        self.act = nn.GELU(approximate="tanh")
+        self.fc2 = nn.Linear(4 * embd_dim, embd_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.fc1(x)
         x = self.act(x)
-        x = self.drop1(x)
         x = self.fc2(x)
-        x = self.drop2(x)
         return x
 
 
-def modulate(
-    x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor
-) -> (
-    torch.Tensor
-):  # shift and scale transformation to introduce conditioning (e.g. time)
+def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+    """Apply conditioning-dependent shift and scale."""
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 
@@ -189,7 +142,7 @@ class ConditioningEmbedder(nn.Module):
             else:
                 drop_ids = force_drop_ids == 1
 
-            # Replace dropped embeddings with the learned null embedding
+            # Replace dropped embeddings with the fixed null embedding.
             embeddings = torch.where(
                 drop_ids[:, None], self.null_embedding[None, :], embeddings
             )
@@ -198,7 +151,7 @@ class ConditioningEmbedder(nn.Module):
 
 # Self-attention with RoPE, GQA support and QK-prenorm
 class SelfAttention(nn.Module):
-    def __init__(self, config: SiTConfig):
+    def __init__(self, config: FlowMatchingTransformerConfig):
         super().__init__()
         self.n_head = config.n_head
         self.n_kv_head = config.n_kv_head
@@ -223,7 +176,7 @@ class SelfAttention(nn.Module):
         self.c_proj = nn.Linear(self.embd_dim, self.embd_dim, bias=False)
 
     def forward(self, x: torch.Tensor, cos_sin: torch.Tensor) -> torch.Tensor:
-        B, T, C = x.size()
+        B, T, _ = x.size()
 
         # Project the input to get queries, keys, and values
         # Shape: (B, T, H, D)
@@ -255,19 +208,10 @@ class SiTBlock(nn.Module):
     A SiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
 
-    def __init__(self, config: SiTConfig, layer_idx: int):
+    def __init__(self, config: FlowMatchingTransformerConfig, layer_idx: int):
         super().__init__()
         self.attn = SelfAttention(config)
-        mlp_hidden_dim = int(
-            config.embd_dim * 4
-        )  # NOTE: Fixed MLP ratio, this is standard
-        approx_gelu = partial(nn.GELU, approximate="tanh")
-        self.mlp = Mlp(
-            in_features=config.embd_dim,
-            hidden_features=mlp_hidden_dim,
-            act_layer=approx_gelu,
-            drop=0,
-        )
+        self.mlp = Mlp(config.embd_dim)
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(), nn.Linear(config.embd_dim, 6 * config.embd_dim, bias=True)
         )
@@ -305,7 +249,7 @@ class FinalLayer(nn.Module):
     The final layer of SiT.
     """
 
-    def __init__(self, config: SiTConfig):
+    def __init__(self, config: FlowMatchingTransformerConfig):
         super().__init__()
         self.linear = nn.Linear(config.embd_dim, config.data_dim, bias=True)
         self.adaLN_modulation = nn.Sequential(
@@ -319,24 +263,20 @@ class FinalLayer(nn.Module):
         return x
 
 
-# Maybe rename?
-class SiT(nn.Module):
-    """
-    Diffusion model with a Transformer backbone.
-    """
+class FlowMatchingTransformer(nn.Module):
+    """Learn a noise-to-data velocity field along a fixed linear path."""
 
     cos: torch.Tensor
     sin: torch.Tensor
 
     def __init__(
         self,
-        config: SiTConfig,
+        config: FlowMatchingTransformerConfig,
     ):
         super().__init__()
         self.data_dim = config.data_dim
         self.cond_dim = config.cond_dim
         self.n_head = config.n_head
-        self.n_kv_heads = config.n_kv_head
         self.embd_dim = config.embd_dim
         self.head_dim = self.embd_dim // self.n_head
         self.sequence_len = config.sequence_len
@@ -353,10 +293,7 @@ class SiT(nn.Module):
             self.cond_dim, self.embd_dim, self.cond_dropout_prob
         )
         self.has_cross_attn = config.cross_attn is not None
-        # TODO: How should we do this to enable cfg?
-        if (
-            config.cross_attn is not None
-        ):  # Need this since ty can't infer that has_cros_attn implies config.cross_attn is not None
+        if config.cross_attn is not None:
             self.cond_sequence_projection = nn.Linear(
                 config.cross_attn.cond_dim, self.embd_dim, bias=config.in_and_out_biases
             )
@@ -408,13 +345,6 @@ class SiT(nn.Module):
 
         self.apply(_basic_init)
 
-        # TODO: This may be redundant, check
-        # TODO: Should this be xavier or normal?
-        w = self.input_projection.weight.data
-        nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
-        if self.input_projection.bias is not None:
-            nn.init.constant_(self.input_projection.bias, 0)
-
         if self.has_cross_attn:
             torch.nn.init.normal_(
                 self.cond_sequence_projection.weight, mean=0.0, std=1.0
@@ -443,10 +373,6 @@ class SiT(nn.Module):
             assert block_mod.bias is not None
             nn.init.constant_(block_mod.bias, 0)
 
-        if block.has_cross_attn:
-            # NOTE: Not any need to modify rn, stub so we remember if we want to modify in future
-            pass
-
         # Zero-out output layers:
         final_mod = self.final_layer.adaLN_modulation[-1]
         assert isinstance(final_mod, nn.Linear)
@@ -464,12 +390,12 @@ class SiT(nn.Module):
         cond_seq: torch.Tensor | None = None,
     ):
         """
-        Forward pass of SiT.
-        x: (B, T, data_dim) tensor of noised sequence data
-        t: (B,) tensor of diffusion timesteps
+        Predict the velocity along the noise-to-data path.
+        x: (B, T, data_dim) tensor of interpolated sequence data
+        t: (B,) tensor of flow times, from zero (noise) to one (data)
         y: (B, cond_dim) tensor of conditioning inputs
         """
-        B, T, C = x.size()
+        B, T, _ = x.size()
         # Grab the rotary embeddings for the current sequence length (they are of shape (1, seq_len, 1, head_dim/2))
         assert T <= self.cos.size(1), (
             f"Sequence length grew beyond the rotary embeddings cache: {T} > {self.cos.size(1)}"
@@ -506,15 +432,6 @@ class SiT(nn.Module):
         x = self.final_layer(x, c)
         return x
 
-    def forward_with_cfg(self, x, t, y, cfg_scale):
-        """
-        Not yet implemented.
-        Forward pass of SiT, but also batches the unconditional forward pass for classifier-free guidance.
-        """
-        # https://github.com/openai/glide-text2im/blob/main/notebooks/text2im.ipynb
-        raise NotImplementedError()
-        # TODO: Do we want to support classifier-free guidance?
-
     def setup_optimiser(
         self,
         weight_decay: float,
@@ -547,73 +464,6 @@ class SiT(nn.Module):
     def get_device(self):
         return self.input_projection.weight.device
 
-
-class Interpolant(Protocol):
-    def calc_It(
-        self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor
-    ) -> torch.Tensor: ...
-
-    def calc_It_dot(
-        self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor
-    ) -> torch.Tensor: ...
-
-
-class LinearInterpolant:
-    def calc_It(
-        self,
-        x_0: torch.Tensor,
-        x_1: torch.Tensor,
-        t: torch.Tensor,
-    ) -> torch.Tensor:
-        return (1 - t) * x_0 + t * x_1  # i.e. Flow Matching Linear Interp
-
-    def calc_It_dot(
-        self,
-        x_0: torch.Tensor,
-        x_1: torch.Tensor,
-        t: torch.Tensor,
-    ) -> torch.Tensor:
-        return x_1 - x_0  # i.e. Flow Matching conditional velocity field
-
-
-# https://arxiv.org/pdf/2209.15571
-class TrigonometricInterpolant:
-    def calc_It(
-        self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor
-    ) -> torch.Tensor:
-        alpha_t = torch.cos(math.pi / 2 * t)
-        sigma_t = torch.sin(math.pi / 2 * t)
-        return alpha_t * x_0 + sigma_t * x_1
-
-    def calc_It_dot(
-        self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor
-    ) -> torch.Tensor:
-        alpha_t_dot = -(math.pi / 2) * torch.sin(math.pi / 2 * t)
-        sigma_t_dot = (math.pi / 2) * torch.cos(math.pi / 2 * t)
-        return alpha_t_dot * x_0 + sigma_t_dot * x_1
-
-
-INTERPOLANTS = {
-    "flow-matching": LinearInterpolant(),
-    "trig": TrigonometricInterpolant(),
-}
-
-
-class InterpolantTransformer(nn.Module):
-    def __init__(self, sit_config: SiTConfig, interpolant: Interpolant):
-        super().__init__()
-        self.sit = SiT(sit_config)
-        self.interpolant = interpolant
-
-    def v_t(
-        self,
-        x: torch.Tensor,
-        t: torch.Tensor,
-        y: torch.Tensor,
-        cond_seq: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        return self.sit.forward(x, t, y, cond_seq=cond_seq)
-
     @torch.no_grad()
     def sample(
         self,
@@ -622,51 +472,41 @@ class InterpolantTransformer(nn.Module):
         num_steps: int = 50,
         method: str = "euler",
         cond_seq: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        if method == "euler":
-            ts = torch.linspace(0, 1, num_steps + 1, device=self.get_device())
-            x_t = x_0
-            for i in range(num_steps):
-                dt = ts[i + 1] - ts[i]
-                x_t = x_t + self.v_t(x_t, ts[i][None], y, cond_seq=cond_seq) * dt
-            return x_t, x_0
-
-        elif method == "heun":
-            ts = torch.linspace(0, 1, num_steps + 1, device=self.get_device())
-            x_t = x_0
-            for i in range(num_steps):
-                dt = ts[i + 1] - ts[i]
-
-                # Euler step
-                v_euler = self.v_t(x_t, ts[i][None], y, cond_seq=cond_seq)
-                x_euler = x_t + v_euler * dt
-
-                # Correction step
-                if i < num_steps - 1:
-                    v_correction = self.v_t(
-                        x_euler, ts[i + 1][None], y, cond_seq=cond_seq
-                    )
-                    x_t = x_t + (dt / 2) * (v_euler + v_correction)
-                else:
-                    x_t = x_euler  # No correction on final step
-            return x_t, x_0
-        else:
+    ) -> torch.Tensor:
+        """Integrate from noise at t=0 to data at t=1."""
+        if method not in ("euler", "heun"):
             raise ValueError("Solver method must be one of [euler, heun]")
+        if num_steps < 1:
+            raise ValueError("num_steps must be positive")
+
+        ts = torch.linspace(0, 1, num_steps + 1, device=self.get_device())
+        x_t = x_0
+        for i in range(num_steps):
+            dt = ts[i + 1] - ts[i]
+            velocity = self(x_t, ts[i][None], y, cond_seq=cond_seq)
+            x_euler = x_t + velocity * dt
+            # Preserve the original sampler: Heun uses Euler on the final step.
+            if method == "heun" and i < num_steps - 1:
+                correction = self(x_euler, ts[i + 1][None], y, cond_seq=cond_seq)
+                x_t = x_t + (dt / 2) * (velocity + correction)
+            else:
+                x_t = x_euler
+        return x_t
 
     def compute_loss(
         self,
         static_input: torch.Tensor,
-        x: torch.Tensor,  # unused but need to pass through for consistent api across models
+        x: torch.Tensor | None,  # unused; shared training API across models
         targets: torch.Tensor,
         mask: torch.Tensor | None = None,
         pred_and_obs_idx: tuple[list[int], list[int]] | None = None,
     ) -> torch.Tensor:
         if pred_and_obs_idx is not None:  # We are doing sequence conditioning
-            assert self.sit.has_cross_attn, (
+            assert self.has_cross_attn, (
                 "Attempting to do training with sequence conditioning without a cross attention module"
             )
             pred_idx, obs_idx = pred_and_obs_idx
-            # we causually condition on the entire sequence of observed idx
+            # Condition on the entire observed sequence.
             conditioning_seq = targets[:, :, obs_idx]
             targets = targets[:, :, pred_idx]
         else:
@@ -678,22 +518,12 @@ class InterpolantTransformer(nn.Module):
         # too much
         x_0 = torch.randn_like(targets, device=self.get_device())
         t = torch.rand((targets.shape[0],), device=self.get_device())
-        I_t = self.interpolant.calc_It(x_0=x_0, x_1=targets, t=t[:, None, None])
-        v_t = self.v_t(I_t, t, static_input, cond_seq=conditioning_seq)
-        dot_I_t = self.interpolant.calc_It_dot(x_0=x_0, x_1=targets, t=t[:, None, None])
-        loss = F.mse_loss(v_t, dot_I_t, reduction="none")
+        t_broadcast = t[:, None, None]
+        x_t = (1 - t_broadcast) * x_0 + t_broadcast * targets
+        velocity = self(x_t, t, static_input, cond_seq=conditioning_seq)
+        target_velocity = targets - x_0
+        loss = F.mse_loss(velocity, target_velocity, reduction="none")
         if mask is not None:
             loss = loss * mask[:, None, None]
             return loss.sum() / (mask.sum() * (x_0.size(1) * x_0.size(2)))
         return loss.mean()
-
-    def setup_optimiser(
-        self,
-        weight_decay: float,
-        learning_rate: float,
-        betas: tuple[float, float] = (0.9, 0.999),  # Standard AdamW
-    ) -> torch.optim.Optimizer:
-        return self.sit.setup_optimiser(weight_decay, learning_rate, betas)
-
-    def get_device(self):
-        return self.sit.get_device()

@@ -30,7 +30,7 @@ from dataloader import (
 )
 from models.itarflow import ImprovedTARFlow, iTarFlowConfig
 from models.mlp import ResidualMLP, ResidualMLPConfig
-from models.sit import InterpolantTransformer, InterpolantTransformerConfig
+from models.sit import FlowMatchingTransformer, FlowMatchingTransformerConfig
 from models.transformer import Transformer, TransformerConfig
 from models.utils.deterministic import make_deterministic
 from models.utils.precision import PrecisionMode, configure_precision, training_autocast
@@ -192,8 +192,8 @@ cs.store(group="model", name="mlp_schema", node=ResidualMLPConfig)
 cs.store(group="model", name="ar_transformer_schema", node=TransformerConfig)
 cs.store(
     group="model",
-    name="interpolant_transformer_schema",
-    node=InterpolantTransformerConfig,
+    name="flow_matching_schema",
+    node=FlowMatchingTransformerConfig,
 )
 cs.store(group="model", name="itarflow_schema", node=iTarFlowConfig)
 cs.store(group="dataset", name="dataset_schema", node=DatasetConfig)
@@ -232,7 +232,7 @@ def get_lr(step, learning_rate, min_lr, max_steps, warmup_steps):
 
 def generate_comparison_plot(
     cfg: TrainConfig,
-    model: ResidualMLP | Transformer | InterpolantTransformer | ImprovedTARFlow,
+    model: ResidualMLP | Transformer | FlowMatchingTransformer | ImprovedTARFlow,
     df: pl.DataFrame,
     candidates: pl.DataFrame,
     data_inputs_means_and_stds: DatasetMeansAndStds,
@@ -377,9 +377,9 @@ def generate_comparison_plot(
             .cpu()
             .numpy()
         )
-    elif "interpolant_transformer" in cfg.model._target_:
-        assert isinstance(model, InterpolantTransformer)
-        # num_steps is always supplied for interpolant models (from cfg.model.num_steps)
+    elif "flow_matching_transformer" in cfg.model._target_:
+        assert isinstance(model, FlowMatchingTransformer)
+        # num_steps is supplied from cfg.model.num_steps for Flow Matching.
         assert num_steps is not None
         assert solver is not None
         multiple_realisations = True
@@ -412,7 +412,7 @@ def generate_comparison_plot(
             for i in range(
                 cfg.dataset.reps_for_comparison_plot
             ):  # match number of reps to param group TODO: make configurable
-                single_realisation_generated, _x0 = model.sample(
+                single_realisation_generated = model.sample(
                     torch.randn(
                         (
                             outputs_tensor.shape[0],  # N param groups
@@ -461,7 +461,7 @@ def generate_comparison_plot(
                 # param_group_inputs=param_group_inputs[:,:,:n_cols_in]
                 # surrogate_input = surrogate_input[:, 0, :n_cols_in]
 
-                param_group_generated, _x0 = model.sample(
+                param_group_generated = model.sample(
                     torch.randn(
                         (
                             outputs_tensor.shape[1],  # num reps
@@ -491,9 +491,7 @@ def generate_comparison_plot(
                 generated.append(param_group_generated)
             generated = np.stack(generated)  # (param_groups, n_reps ,T, output_cols)
         else:
-            raise ValueError(
-                "Unrecognised multi_mode for stochastic interpolant transformer"
-            )
+            raise ValueError("Unrecognised multi_mode for Flow Matching transformer")
     elif "itarflow" in cfg.model._target_:
         assert isinstance(model, ImprovedTARFlow)
         cond_seq = None
@@ -675,13 +673,13 @@ def run_training(
             cfg.model.static_input_dim = len(cfg.dataset.surrogate_input_variables)
             pred_and_obs_idx = None
 
-    elif "interpolant_transformer" in cfg.model._target_:
+    elif "flow_matching_transformer" in cfg.model._target_:
         all_out = cfg.dataset.output_variables
-        cfg.model.sit.sequence_len = cfg.dataset.num_timesteps
-        cfg.model.sit.cond_dim = len(cfg.dataset.surrogate_input_variables)
+        cfg.model.sequence_len = cfg.dataset.num_timesteps
+        cfg.model.cond_dim = len(cfg.dataset.surrogate_input_variables)
 
         if obs_vars:
-            assert cfg.model.sit.cross_attn is not None, (
+            assert cfg.model.cross_attn is not None, (
                 "Attempting to train on observed sequences without a cross-attention module"
             )
             pred_vars = [v for v in all_out if v not in obs_vars]
@@ -690,11 +688,11 @@ def run_training(
             pred_and_obs_idx = (pred_idx, obs_idx)
 
             # Cross-attn input dim is the number of observed sequence variables
-            cfg.model.sit.cross_attn.cond_dim = len(obs_idx)
+            cfg.model.cross_attn.cond_dim = len(obs_idx)
             # Our x data dim is the number of variables we're trying to predict
-            cfg.model.sit.data_dim = len(pred_idx)
+            cfg.model.data_dim = len(pred_idx)
         else:
-            cfg.model.sit.data_dim = len(cfg.dataset.output_variables)
+            cfg.model.data_dim = len(cfg.dataset.output_variables)
             pred_and_obs_idx = None
     elif "itarflow" in cfg.model._target_:
         all_out = cfg.dataset.output_variables
@@ -719,7 +717,7 @@ def run_training(
     else:
         raise ValueError(f"Cannot identify model with target {cfg.model._target_}")
     OmegaConf.set_struct(cfg, True)  # ty: ignore[invalid-argument-type]
-    model: ResidualMLP | Transformer | InterpolantTransformer | ImprovedTARFlow = (
+    model: ResidualMLP | Transformer | FlowMatchingTransformer | ImprovedTARFlow = (
         hydra.utils.instantiate(cfg.model)
     )
     model.to(runtime.device)
@@ -1001,13 +999,13 @@ def run_training(
             subsample=cfg.sampling.subsample,
             keep_greater_than_zero=cfg.sampling.keep_greater_than_zero,
             num_steps=cfg.model.num_steps
-            if "interpolant_transformer" in cfg.model._target_
+            if "flow_matching_transformer" in cfg.model._target_
             else None,
             solver=cfg.model.solver
-            if "interpolant_transformer" in cfg.model._target_
+            if "flow_matching_transformer" in cfg.model._target_
             else None,
             multi_mode=cfg.model.multi_mode
-            if "interpolant_transformer" in cfg.model._target_
+            if "flow_matching_transformer" in cfg.model._target_
             else None,
             device=str(runtime.device),
         )

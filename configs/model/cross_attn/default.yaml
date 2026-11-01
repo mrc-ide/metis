@@ -2,6 +2,6 @@ defaults:
   - _self_
 
 n_head: 8 
-cond_dim: null
+cond_dim: 1  # Replaced with the number of observed variables in train.py.
 n_kv_head: 8 
 qkv_bias: true
