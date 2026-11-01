@@ -4,7 +4,7 @@ from omegaconf import OmegaConf
 
 from models.itarflow import ImprovedTARFlow
 from models.mlp import ResidualMLP
-from models.sit import InterpolantTransformer
+from models.sit import FlowMatchingTransformer
 from models.transformer import Transformer
 
 
@@ -87,9 +87,7 @@ class Surrogate:
                 "x_input_dim": n_out,
                 "sequence_len": t + 1,
             }
-        elif isinstance(self.model, InterpolantTransformer):
-            c = c.sit
-            cross_attn = c.get("cross_attn")
+        elif isinstance(self.model, FlowMatchingTransformer):
             expected = {"cond_dim": n_in, "data_dim": n_out, "sequence_len": t}
         elif isinstance(self.model, ImprovedTARFlow):
             expected = {"static_in": n_in, "out_channels": n_out, "num_timesteps": t}
@@ -158,24 +156,24 @@ class Surrogate:
         use_kv_cache: bool | None = None,
     ) -> torch.Tensor:
         """Accept raw [B, inputs] and optional [B, T, observed]; return [B, samples, T, predicted]."""
-        stochastic = isinstance(self.model, (InterpolantTransformer, ImprovedTARFlow))
+        stochastic = isinstance(self.model, (FlowMatchingTransformer, ImprovedTARFlow))
         if type(num_samples) is not int or num_samples < 1:
             raise ValueError("num_samples must be a positive integer")
         if not stochastic and (num_samples != 1 or seed is not None):
             raise ValueError(
                 f"{type(self.model).__name__} is deterministic; use num_samples=1 and omit seed"
             )
-        if not isinstance(self.model, InterpolantTransformer) and (
+        if not isinstance(self.model, FlowMatchingTransformer) and (
             num_solver_steps is not None or solver is not None
         ):
             raise ValueError(
-                "num_solver_steps and solver are supported only by interpolant models"
+                "num_solver_steps and solver are supported only by Flow Matching models"
             )
         if not isinstance(self.model, Transformer) and use_kv_cache is not None:
             raise ValueError(
                 "use_kv_cache is supported only by autoregressive transformers"
             )
-        if isinstance(self.model, InterpolantTransformer):
+        if isinstance(self.model, FlowMatchingTransformer):
             num_solver_steps = (
                 self.config.model.get("num_steps")
                 if num_solver_steps is None
@@ -184,11 +182,11 @@ class Surrogate:
             solver = self.config.model.get("solver") if solver is None else solver
             if type(num_solver_steps) is not int or num_solver_steps < 1:
                 raise ValueError(
-                    "Interpolant inference requires num_solver_steps=<positive integer>, supplied explicitly or saved as model.num_steps in the checkpoint"
+                    "Flow Matching inference requires num_solver_steps=<positive integer>, supplied explicitly or saved as model.num_steps in the checkpoint"
                 )
             if solver not in ("euler", "heun"):
                 raise ValueError(
-                    "Interpolant inference requires solver='euler' or 'heun', supplied explicitly or saved in the checkpoint"
+                    "Flow Matching inference requires solver='euler' or 'heun', supplied explicitly or saved in the checkpoint"
                 )
         if isinstance(self.model, Transformer):
             if use_kv_cache is None:
@@ -247,8 +245,8 @@ class Surrogate:
             inputs = inputs.repeat_interleave(num_samples, dim=0)
             if observed is not None:
                 observed = observed.repeat_interleave(num_samples, dim=0)
-            if isinstance(self.model, InterpolantTransformer):
-                output, _ = self.model.sample(
+            if isinstance(self.model, FlowMatchingTransformer):
+                output = self.model.sample(
                     noise,
                     inputs,
                     num_steps=num_solver_steps,

@@ -49,30 +49,56 @@ The mathematical details of these models and the derivation of their training ob
 
 ## Configuring a Flow Matching model
 
-Metis's implementation is designed to support different kinds of *Stochastic Interpolant* algorithms (the general name for diffusion and flow matching), although currently only Flow Matching has been set up and tested. The top-level config controls details like the type of algorithm and solver steps for evaluation and contains an inner architectural config that is very similar to the transformer:
+Metis uses Flow Matching with a fixed linear path from Gaussian noise $x_0$ to a training sequence $x_1$: $x_t=(1-t)x_0+tx_1$. The network learns the velocity target $x_1-x_0$ at uniformly sampled times $t\in[0,1]$.
 
-* `interpolant`: Currently only 'flow-matching' supported.
-* `num_steps`: Number of ODE solver steps for evaluations, does not impact training.
-* `solver`: ODE solver, currently only 'heun' (second-order) and 'euler' (first-order) are supported.
-* `multi_mode`: Whether to generate multiple samples from the median of the parameter group ('median' option) or to generate multiple samples for each entry in the parameter group ('entire_parameter_group'). This second option only makes sense for models like HRP and Magenta where realisations within the same parameter group can have different static inputs.
-* `sit`:
-    * `sequence_len`: Number of timesteps in the data sequence.
-    * `data_dim`: Number of variables per datapoint.
-    * `cond_dim`: Number of static input variables.
-    * `n_blocks`: Number of transfomer blocks.
-    * `n_head`: Number of query heads in attention layers.
-    * `n_kv_head`: Number of key-value heads in attention layers.
-    * `qkv_bias`: Whether the projection matrices in the self-attention module use biases.
-    * `emdb_dim`: Hidden dimension of the network
-    * `cond_dropout_prob`: Currently unused - but could be used to enable [classifier-free guidance](https://arxiv.org/abs/2207.12598)
-    * `in_and_out_biases`: Whether the input and out projections use learnable biases.
-    * `cross_attn`: The cross attention config for sequence conditioning, can be `None`.
+Architecture and sampling settings share a single flat model config. For example, `configs/model/flow_matching_default.yaml` contains:
 
-The `sequence_len`, `data_dim` and `cond_dim` are all automatically configured based on the dataset config.
+```yaml
+defaults:
+  - flow_matching_schema
+  - _self_
+
+num_steps: 50
+solver: heun
+multi_mode: median
+
+n_blocks: 12
+n_head: 8
+n_kv_head: 8
+qkv_bias: true
+embd_dim: 64
+cond_dropout_prob: 0.0
+in_and_out_biases: true
+cross_attn: null
+```
+
+The schema supplies `_target_: models.sit.create_flow_matching_transformer`. Select a preset with `model=flow_matching_default` and override fields directly, for example `model.n_blocks=8 model.num_steps=100`.
+
+### Sampling settings
+
+* `num_steps`: Number of ODE solver steps for evaluation and inference; does not affect training.
+* `solver`: Either `heun` or `euler`. Euler is first-order; Heun uses a second-order correction on all but the final step, which uses Euler.
+* `multi_mode`: Controls comparison-plot sampling during training. `median` uses the parameter-group median static inputs (and median observed sequences, when conditioning). `entire_param_group` generates a sample for each entry's static inputs. The latter is useful for models like HRP and Magenta where realisations within the same parameter group can have different static inputs; it currently does not support sequence conditioning.
+
+### Architecture settings
+
+* `sequence_len`: Number of timesteps in the data sequence.
+* `data_dim`: Number of predicted variables per timestep.
+* `cond_dim`: Number of static input variables.
+* `n_blocks`: Number of transformer blocks.
+* `n_head`: Number of query heads in attention layers.
+* `n_kv_head`: Number of key-value heads in attention layers; must divide `n_head`.
+* `qkv_bias`: Whether the query, key, and value projections in self-attention use biases.
+* `embd_dim`: Hidden dimension of the network.
+* `cond_dropout_prob`: Probability of replacing the static conditioning embedding with a fixed zero embedding during training. Defaults to zero. This is a building block for [classifier-free guidance](https://arxiv.org/abs/2207.12598), but guided sampling is not implemented.
+* `in_and_out_biases`: Controls biases in the data input projection and the optional conditioning-sequence input projection. Despite the name, the final output projection always has a bias.
+* `cross_attn`: Cross-attention configuration for sequence conditioning, or `null` for static-only conditioning. For example, add `+model/cross_attn=default` when the dataset specifies `observed_output_variables`.
+
+Training derives `sequence_len`, `data_dim`, and `cond_dim` from the dataset config. With sequence conditioning, `data_dim` counts only predicted variables and `cross_attn.cond_dim` is set to the number of observed variables.
 
 
 | Config | `n_blocks` | `n_head` | `n_kv_head` | `embd_dim` 
-|---|---:|---:|---:|---:|---|
+|---|---:|---:|---:|---:|
 | `flow_matching_small` | 6 | 4 | 4 | 64 |
 | `flow_matching_default` | 12 | 8 | 8 | 64 |
 | `flow_matching_large` | 16 | 16 | 16 | 128 |
